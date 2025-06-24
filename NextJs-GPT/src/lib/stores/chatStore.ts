@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { type ChatHead } from '@/components/sidebar'
+import { type MessageBubbleProps } from '@/components/messageBubble';
 
 interface ChatStore {
 
@@ -11,11 +12,15 @@ interface ChatStore {
     setChatHeads: (heads: ChatHead[]) => void;
     addChatHead: (head: ChatHead) => void;
     resetChatHeads: () => void;
-    removeChatHead: (head: ChatHead) => void;
+    removeChatHead: (id: String) => void;
 
 
-    isInitialChatHeadFetchDone: boolean;
-    setInitialChatHeadFetchDone: (val: boolean) => void;
+    allChats: Record<string, MessageBubbleProps[]>;
+
+    setAllChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // New: to replace history
+    appendChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // Renamed: to append new messages
+
+
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -33,15 +38,34 @@ export const useChatStore = create<ChatStore>((set) => ({
             chatHeads: [...state.chatHeads, head],
         })),
 
-    removeChatHead: (head) =>
+    removeChatHead: (id) =>
         set((state) => ({
-            chatHeads: state.chatHeads.filter((chatHead) => chatHead.chatId !== head.chatId),
+            chatHeads: state.chatHeads.filter((chatHead) => chatHead.chatId !== id),
         })),
-    
+
     resetChatHeads: () => set({ chatHeads: [] }),
 
 
-    isInitialChatHeadFetchDone : false,
-    setInitialChatHeadFetchDone: (val) => set(() => ({ isInitialChatHeadFetchDone: val })),
-    
+    allChats: {},
+    pendingMessages: {},
+
+    // Action to completely replace the messages for a given chatId (e.g., when fetching history)
+    setAllChatMessages: (chatId, messages) =>
+        set((state) => ({
+            allChats: {
+                ...state.allChats,
+                [chatId]: messages, // Directly assign the new array
+            },
+        })),
+
+    // Action to append new messages to an existing chat (e.g., user input, AI response)
+    appendChatMessages: (chatId, messages) =>
+        set((state) => ({
+            allChats: {
+                ...state.allChats,
+                [chatId]: [...(state.allChats[chatId] || []), ...messages], // Append to existing
+            },
+        })),
+
+
 }));

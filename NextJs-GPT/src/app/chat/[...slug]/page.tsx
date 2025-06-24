@@ -1,19 +1,19 @@
 'use client'; // This directive ensures the component is rendered on the client-side
 
-import React, { useEffect, useState, useCallback, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { useParams, notFound, useRouter } from 'next/navigation';
 
-
 // Correctly import the component and its type
-import MessageBubble, { type MessageBubbleProps } from '@/components/messageBubble';
+import { type MessageBubbleProps } from '@/components/messageBubble';
 import ChatWindow from '@/components/chatWindow';
 import ChatInput from '@/components/chatInput';
 import Sidebar, { type ChatHead } from '@/components/sidebar';
 import { NewChatModal } from '@/components/newChat';
 
 import { useChatStore } from '@/lib/stores/chatStore';
+import { fetchChatHeads, fetchMessages, getAiResponse, updatePendingMessages, createNewChatHead, pushToPendingMessages, deleteChatHead } from '@/lib/chatServices';
 
 import toast from 'react-hot-toast';
 
@@ -24,70 +24,57 @@ import toast from 'react-hot-toast';
 // improved message spacing, and a visually "pushed right" scrollbar.
 export default function ChatPage() {
 
+  // =================================================================================
+  // Hooks must be called at the top level, before any early returns.
+  // =================================================================================
   const params = useParams();
   const router = useRouter();
 
-  const path = Array.isArray(params.slug) ? params.slug : [];
-  const userIdFromRoute = path[0];
-  const chatId = path[1];
-
-
-
-  // 404 if no userId (i.e., visiting /chats)
-  if (!path[0]) return notFound();
-
   const userId = useChatStore((state) => state.userId);
   const setUserId = useChatStore((state) => state.setUserId);
-
-  useEffect(() => {
-    if (userIdFromRoute && userId !== userIdFromRoute)
-      // console.log("I am supposed to run only once!")
-      setUserId(userIdFromRoute);
-
-  }, [userIdFromRoute]);
-
-  // console.log('🧠 userId:', userId);
-  // console.log('💬 chatId:', chatId);
 
   const chatHeads = useChatStore((state) => state.chatHeads);
   const setChatHeads = useChatStore((state) => state.setChatHeads);
   const addChatHead = useChatStore((state) => state.addChatHead);
   const removeChatHead = useChatStore((state) => state.removeChatHead);
 
-
-  // const [chatHeads, setChatHeads] = useState<ChatHead[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
-  // State for the new chat modal
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const allChats = useChatStore((state) => state.allChats);
 
-  // Runs only when chatHeads component changes, possible if newChatHead made or newUserID.
+  // const pendingMessages = useChatStore((state) => state.pendingMessages);
+  const [inputText, setInputText] = useState('');
+  const [isProcessingInput, setIsProcessingInput] = useState(false);
+  // =================================================================================
 
-  const isInitialChatHeadFetchDone = useChatStore((state) => state.isInitialChatHeadFetchDone);
-  const setInitialChatHeadFetchDone = useChatStore((state) => state.setInitialChatHeadFetchDone);
+  const path = Array.isArray(params.slug) ? params.slug : [];
+  const userIdFromRoute = path[0];
+  const chatId = path[1];
 
   useEffect(() => {
-    if (!userId || isInitialChatHeadFetchDone) return;
+    if (userIdFromRoute && userId !== userIdFromRoute)
+      setUserId(userIdFromRoute);
+  }, [userIdFromRoute, userId, setUserId]);
 
-    const fetchChatHeads = async () => {
-      console.log("✅ FETCH CALLED with userId:", userId);
-      try {
-        const res = await fetch(`http://localhost:3001/chatHeads/${userId}`);
-        const data = await res.json();
-        setChatHeads(data);
-        setInitialChatHeadFetchDone(true);
-      } catch (err) {
-        console.error("❌ Failed to fetch chat heads:", err);
+
+  // Do a 1 time initial api call, to grab the chatHeads.
+  useEffect(() => {
+    if (!userId || useChatStore.getState().chatHeads.length > 0) return;
+    fetchChatHeads(userId).then(response => {
+
+      if (response.success) {
+        if (Array.isArray(response.message))
+          setChatHeads(response.message);
       }
-    };
+      else {
+        toast.error("Error Fetching chats-heads!");
+      }
+    });
+  }, [userId, setChatHeads]);
 
-    fetchChatHeads();
-  }, [userId, isInitialChatHeadFetchDone]);
-  // empty array = run once when component mounts, but we gonna run it whenever userId changes
 
-  // useEffect(() => {
-  //   console.log(chatHeads);
-  // }, [chatHeads]);
 
   // Set activeChatId if there is a chatId or else let it be null
   useEffect(() => {
@@ -100,144 +87,211 @@ export default function ChatPage() {
   }, [chatId]); // Only re-run this effect if chatId changes
 
 
-  const [allChats, setAllChats] = useState<Record<string, MessageBubbleProps[]>>({});
-
-  // Varible to control blinking of message bubbles during chatUpdation
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-
-  // Runs on when activeChatId changes and populates the messages array.
-
-  // const [loadingOverlayVisible, setLoadingOverlayVisible] = useState(false);
-
-
   // Fetch messages when activeChatId changes, but ONLY if activeChatId is valid
-  // useLayoutEffect(() => {
-  //   const fetchMessages = async () => {
-  //     if (!activeChatId || !userId) return;
 
-  //     if (allChats[activeChatId]) return;
+  useEffect(() => {
 
-  //     try {
-  //       setIsLoadingMessages(true);  // Begin loading
-  //       // setMessages([]); // Clears stale messages from previous chat before new ones come
-  //       const res = await fetch(`http://localhost:3001/chats/${userId}/${activeChatId}`);
-  //       const data = await res.json();
-  //       setAllChats(prev => ({
-  //         ...prev,
-  //         [activeChatId]: data,
-  //       }));
-  //     }
-  //     catch (err) {  
-  //       console.error('Failed to fetch messages:', err);
-  //     }
-  //     finally {
-  //       // ✅ Add 0.5s buffer to loading fade-out
-  //       setTimeout(() => {
-  //         setIsLoadingMessages(false);
-  //       }, 1000);
-  //     }
-  //   };
-  //   fetchMessages();
-  // }, [activeChatId, userId]); // Re-run when activeChatId changes
+    if (!activeChatId || !userId) return;
 
-  const currentMessages = allChats[activeChatId ?? ''] || [];
+    setIsLoadingMessages(true);  // Begin loading animation
 
+    fetchMessages(userId, activeChatId).then(response => {
+      if (response.success) {
+        if (Array.isArray(response.message)) {
+          useChatStore.getState().setAllChatMessages(activeChatId, response.message); // Use setAllChatMessages to replace history
+        }
+      }
+      else {
+        toast.error("Error Fetching chat-history for the current chat!!");
+      }
+    }).finally(() => {
+      setTimeout(() => {
+        setIsLoadingMessages(false);
+      }, 500);
+    });
 
-  const [inputText, setInputText] = useState('');
+  }, [activeChatId, userId]); // 🔁 Always fetch on route change
 
-  // Diables user input and does UI stuff when AI is processing user input
-  const [isProcessingInput, setIsProcessingInput] = useState(false);
 
   function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     setInputText(event.currentTarget.value);
   }
 
 
-  function handleSubmission(event: React.FormEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) {
-    const trimmed_output = inputText.trim();
+  const handleSubmission = async (event: React.FormEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
 
-    // Do nothing if no valid string is given.
-    if (trimmed_output === '')
-      return
+    const trimmedOutput = inputText.trim();
 
-    const newUserMessage: MessageBubbleProps = { id: uuidv4(), sender: 'user', text: trimmed_output };
+    if (!trimmedOutput || !activeChatId || !userId) return;
 
-    // Update Messages array
-    // setMessages(prevMessages => [...prevMessages, newUserMessage]); FIX IT
-    setInputText("");
+    const newUserMessage: MessageBubbleProps = {
+      id: uuidv4(), sender: 'user', text: trimmedOutput
+    };
 
-    // log the user mssg
-    console.log(trimmed_output)
+    // Add user message to redundacy DB
+    const userMssgPendingResponse = await pushToPendingMessages(userId, activeChatId, newUserMessage)
+    if (!userMssgPendingResponse.success) {
+      toast.error("Failed to save user message to server.");
+      return;
+    }
 
-    setIsProcessingInput(true); // Ai processing time intiated.
+    // Handle chat updation of UI
+    useChatStore.getState().appendChatMessages(activeChatId, [newUserMessage]); // Use appendChatMessages for new user message
 
 
-    // Simulate AI response after 2 seconds
-    setTimeout(() => {
-      const fakeAiResponse: MessageBubbleProps = {
-        id: uuidv4(),
-        sender: "ai",
-        text: "This is a simulated AI response. Processing complete."
-      };
+    // useChatStore.getState().appendPendingMessage(activeChatId, newUserMessage);
+    setInputText('');
+    setIsProcessingInput(true);
 
-      // setMessages(prevMessages => [...prevMessages, fakeAiResponse]); FIX IT
-      setIsProcessingInput(false);
-    }, 2000);
+    const aiMssgResponse = await getAiResponse(userId, activeChatId, trimmedOutput)
 
-  }
+    if (aiMssgResponse.success) {
+      const aiMessage = aiMssgResponse.message;
+      const aiMessageId = uuidv4();
+      aiMessage.id = aiMessageId;
 
-  const handleSelectChat = useCallback((chatId: string) => {
+      // Handle chat updation of UI
+      useChatStore.getState().appendChatMessages(activeChatId, [aiMessage]); // Use appendChatMessages for new AI message
+
+      setTimeout(async () => { // Simulate a network delay.
+        // useChatStore.getState().appendPendingMessage(activeChatId, { ...aiMessage, id: aiMessageId });
+
+        // Add ai message to redundacy DB
+        const aiMssgPendingResponse = await pushToPendingMessages(userId, activeChatId, aiMessage)
+        if (!aiMssgPendingResponse.success) {
+          toast.error("Failed to save AI message to server.");
+        }
+
+        setIsProcessingInput(false);
+      }, 200);
+
+    } else {
+      toast.error(`Failed to get AI response: ${aiMssgResponse.message}`);
+      setIsProcessingInput(false); // Stop processing on API error
+    }
+
+
+  };
+
+
+  const handleSelectChat = useCallback(async (chatId: string) => {
+
+    if (!userId) return;
+
+    // Return if clicked chat is having same id as activeChatId
+    if (activeChatId === chatId) return;
+
+    // // Take care of pending Messages before switching to a another chat.
+    // if (activeChatId) {
+    //   const pendingMessages = useChatStore.getState().pendingMessages[activeChatId] || [];
+
+    //   updatePendingMessages(userId, activeChatId, pendingMessages).then(data => {
+    //     if (data.success) {
+    //       useChatStore.getState().clearPendingMessages(activeChatId);
+    //     } else {
+    //       toast.error("Failed to sync pending messages.");
+    //     }
+    //   });
+    // }
+
     setActiveChatId(chatId);
     // Simulate router navigation for local environment
     router.push(`/chat/${userId}/${chatId}`);
-  }, [userId, router]);
+  }, [userId, router, activeChatId]);
 
 
 
-  const handleNewChat = useCallback(() => {
-    console.log("New Chat clicked!");
-    setShowNewChatModal(true);
-    // Create logic later
-  }, []);
+  const handleNewChat = useCallback(() =>
+    setShowNewChatModal(true), [setShowNewChatModal]);
+
+
 
   useEffect(() => {
     console.log("chatHeads updated:", chatHeads);
   }, [chatHeads]);
 
-  const handleCreateNewChat = useCallback((newchatName: string) => {
+  const handleCreateNewChat = useCallback(async (newchatName: string) => {
+    if (!userId) return;
+
+    // // 1. Sync pending messages from the current chat, given we have activeChatId valid.
+    // if (activeChatId) {
+    //   const pendingMessages = useChatStore.getState().pendingMessages[activeChatId] || [];
+    //   const data = await updatePendingMessages(userId, activeChatId, pendingMessages);
+
+    //   if (data.success) {
+    //     useChatStore.getState().clearPendingMessages(activeChatId);
+    //   } else {
+    //     toast.error("Failed to sync messages from the previous chat.");
+    //   }
+    // }
+
     const newChatId = uuidv4();
-    const newChatHead: ChatHead = { chatId: newChatId, name: newchatName, preview: 'No messages yet.' }; // Use provided name
+    const newChatHead: ChatHead = {
+      chatId: newChatId,
+      name: newchatName,
+      preview: 'No messages yet.',
+    };
 
-    // 1. Optimistic UI update
+    // 2. Optimistic UI update
     addChatHead(newChatHead);
-    setActiveChatId(newChatId); // Activate the new chat
-    setInputText(''); // Clear input for the new chat
-    router.push(`/chat/${userId}/${newChatId}`); // Redirect to the particular new chat.
-    console.log("New Chat created! ID:", newChatId, "Name:", newchatName);
-    setShowNewChatModal(false); // Close the new chat modal.
+    setInputText('');
+    setShowNewChatModal(false); // ✅ Close the modal now to feel instant
 
-    // 2. Background sync
-    (async () => {
-      const response = await fetch(`http://localhost:3001/createChat/${userId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ chatId: newChatHead.chatId, name: newChatHead.name }),
-      });
+    // 3. Wait for DB sync before navigating
+    const response = await createNewChatHead(userId, newChatHead);
 
-      if (!response.ok) {
-        const err = await response.json();
-        console.error("❌ Backend error:", err);
-        removeChatHead(newChatHead);
-        // toast.error(err?.error || "Failed to sync chat with server.");
-        toast.error("Failed to sync chat head with server.");
+    if (!response.success) {
+      removeChatHead(newChatHead.chatId);
+      toast.error(response.message || "Failed to sync chat head with server.");
+      return;
+    }
 
-      }
-    })();
+    // 4. Route after chat creation is confirmed
+    setActiveChatId(newChatId);
+    router.push(`/chat/${userId}/${newChatId}`);
+    console.log("✅ New Chat created:", newChatId, newchatName);
+
+  }, [userId, router, activeChatId, addChatHead, removeChatHead]);
 
 
-  }, [userId, router]);
+  const handleChatHeadDelete = useCallback(async (chatId: string) => {
+
+    if (!userId) return;
+
+    const response = await deleteChatHead(userId, chatId);
+
+    if (!response.success) {
+      toast.error(response.message || "Failed to delete chat-head");
+      return;
+    }
+
+    if (response.success) {
+      removeChatHead(chatId);
+      toast.success(response.message);
+      router.push(`/chat/${userId}`); // Push Back to base homepage
+    }
+
+  }, [userId, chatId, router]);
+
+
+
+  const currentMessages = [
+    ...(allChats[activeChatId || ''] || []),
+    // ...(pendingMessages[activeChatId || ''] || []),
+  ];
+
+
+  // useEffect(() => {
+  //   console.log("Updated Pending Messages, to be synced : ", useChatStore.getState().pendingMessages);
+  // }, [pendingMessages]);
+
+
+  // ✅ Do this check AFTER all hooks
+  if (!userIdFromRoute) {
+    notFound(); // still works here in Next.js
+    // return null;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex p-4 font-geist-sans">
@@ -247,7 +301,7 @@ export default function ChatPage() {
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
-        isLoadingMessages={isLoadingMessages}
+        onDelete={handleChatHeadDelete}
       />
 
       {/* Main chat container */}
@@ -274,7 +328,6 @@ export default function ChatPage() {
           <ChatWindow
             messages={isLoadingMessages ? null : currentMessages}
             isProcessingInput={isProcessingInput}
-            isLoadingMessages={isLoadingMessages}
           />
           <ChatInput
             inputText={inputText}

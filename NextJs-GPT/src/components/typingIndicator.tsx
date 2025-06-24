@@ -1,4 +1,3 @@
-// TypingIndicator.tsx
 import React from 'react';
 
 const TypingIndicator: React.FC = () => {
@@ -17,12 +16,12 @@ const TypingIndicator: React.FC = () => {
           r="10"
           stroke="currentColor"
           strokeWidth="4"
-        ></circle>
+        />
         <path
           className="opacity-75"
           fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0-8H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        ></path>
+          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+        />
       </svg>
       <span className="text-gray-400 text-lg">Processing...</span>
     </div>

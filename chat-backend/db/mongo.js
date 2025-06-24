@@ -7,12 +7,14 @@ dotenv.config();
 const client = new MongoClient(process.env.MONGODB_URI);
 
 let chatsCollection;
+let pendingMessagesCollection;
 
 async function connectToDB() {
   try {
     await client.connect();
     const db = client.db(process.env.DB_NAME);
     chatsCollection = db.collection('chats');
+    pendingMessagesCollection = db.collection('pendingMessages');
     console.log('✅ Connected to MongoDB');
   } catch (err) {
     console.error('❌ MongoDB connection error:', err);
@@ -20,4 +22,4 @@ async function connectToDB() {
   }
 }
 
-export { connectToDB, chatsCollection };
+export { connectToDB, chatsCollection, pendingMessagesCollection };
