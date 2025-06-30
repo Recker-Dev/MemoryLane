@@ -24,10 +24,10 @@ export async function middleware(request: NextRequest) {
     // Get JWT Token from cookies
     const token = request.cookies.get('auth_token')?.value;
 
-    // If no Token, redirect to /home
+    // If no Token, redirect to /
     if (!token) {
-        console.log("No auth token found, redirecting to /home");
-        return NextResponse.redirect(new URL('/home', request.url));
+        console.log("No auth token found, redirecting to /");
+        return NextResponse.redirect(new URL('/', request.url));
     }
 
 
@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
 
         if (!userIdFromToken) {
             console.log("JWT missing userId payload.");
-            return NextResponse.redirect(new URL('/home', request.url));
+            return NextResponse.redirect(new URL('/', request.url));
         }
 
         if (urlUserId != userIdFromToken) {

@@ -40,7 +40,7 @@ export default function SignUpPage() {
                 return;
             }
             toast.success('Registration successful! Please log in.');
-            router.push('/home');
+            router.push('/');
         }
         catch (error) {
             console.error(error);

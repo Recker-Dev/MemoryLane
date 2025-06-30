@@ -187,7 +187,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-3 mt-4">
+      <div className="flex items-center gap-3 mt-4 mb-4">
         <input
           ref={mainInputRef}
           type="text"
