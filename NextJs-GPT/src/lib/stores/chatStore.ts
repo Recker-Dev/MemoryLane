@@ -12,13 +12,14 @@ interface ChatStore {
     setChatHeads: (heads: ChatHead[]) => void;
     addChatHead: (head: ChatHead) => void;
     resetChatHeads: () => void;
-    removeChatHead: (id: String) => void;
+    removeChatHead: (id: string) => void;
 
 
     allChats: Record<string, MessageBubbleProps[]>;
 
     setAllChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // New: to replace history
     appendChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // Renamed: to append new messages
+
 
 
 }
@@ -60,12 +61,38 @@ export const useChatStore = create<ChatStore>((set) => ({
 
     // Action to append new messages to an existing chat (e.g., user input, AI response)
     appendChatMessages: (chatId, messages) =>
-        set((state) => ({
-            allChats: {
-                ...state.allChats,
-                [chatId]: [...(state.allChats[chatId] || []), ...messages], // Append to existing
-            },
-        })),
+        set((state) => {
+            const existingMessages = state.allChats[chatId] || [];
+
+            const newMessages = [...existingMessages, ...messages];
+
+            let updatedChatHeads = state.chatHeads;
+
+            if (existingMessages.length === 0 && messages.length > 0) {
+                // Find first USER message (not AI)
+                const firstUserMessage = messages.find((msg) => msg.sender === 'user');
+                if (firstUserMessage) {
+                    updatedChatHeads = state.chatHeads.map((head) => {
+                        if (head.chatId === chatId) {
+                            return {
+                                ...head,
+                                preview: firstUserMessage.text,
+                            };
+                        }
+                        return head;
+                    });
+                }
+            }
+
+            return {
+                allChats: {
+                    ...state.allChats,
+                    [chatId]: newMessages,
+                },
+                chatHeads: updatedChatHeads,
+            };
+        }),
+
 
 
 }));

@@ -9,6 +9,7 @@ interface ChatWindowProps {
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isProcessingInput }) => {
+  
   return (
     <div className="flex-grow overflow-y-auto space-y-6 px-12 py-4 custom-scrollbar">
       {messages &&

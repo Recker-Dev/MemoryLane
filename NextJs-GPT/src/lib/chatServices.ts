@@ -1,5 +1,6 @@
 import { type ChatHead } from '@/components/sidebar';
 import { type MessageBubbleProps } from '@/components/messageBubble';
+import {type Memory} from '@/components/chatMemoriesDropdown';
 
 
 export async function fetchChatHeads(userId: string): Promise<{ success: boolean, message: string | ChatHead[] }> {
@@ -99,38 +100,38 @@ export async function pushToPendingMessages(userId:string, chatId:string, messag
 
 }
 
-export async function updatePendingMessages(userId: string, chatId: string, pendingMessages: MessageBubbleProps[]): Promise<{ success: boolean, message: string }> {
-    if (!pendingMessages || pendingMessages.length === 0) {
-        console.log("❌ No pending messages to update");
+// export async function updatePendingMessages(userId: string, chatId: string, pendingMessages: MessageBubbleProps[]): Promise<{ success: boolean, message: string }> {
+//     if (!pendingMessages || pendingMessages.length === 0) {
+//         console.log("❌ No pending messages to update");
 
-        return {
-            success: true,
-            message: "No pending messages to update"
-        };
-    }
+//         return {
+//             success: true,
+//             message: "No pending messages to update"
+//         };
+//     }
 
-    const response = await fetch(`http://localhost:3001/chats/${userId}/${chatId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: pendingMessages }),
-    });
+//     const response = await fetch(`http://localhost:3001/chats/${userId}/${chatId}`, {
+//         method: 'POST',
+//         headers: {
+//             'Content-Type': 'application/json',
+//         },
+//         body: JSON.stringify({ messages: pendingMessages }),
+//     });
 
-    if (!response.ok) {
-        console.error("❌ Failed to update pending messages:", response);
-        return {
-            success: false,
-            message: await response.text()
-        };
-    }
+//     if (!response.ok) {
+//         console.error("❌ Failed to update pending messages:", response);
+//         return {
+//             success: false,
+//             message: await response.text()
+//         };
+//     }
 
-    console.log("✅ Pending Messages Updated");
-    return {
-        success: true,
-        message: "Pending Messages Updated"
-    };
-}
+//     console.log("✅ Pending Messages Updated");
+//     return {
+//         success: true,
+//         message: "Pending Messages Updated"
+//     };
+// }
 
 export async function createNewChatHead(userId: string, chatHead: ChatHead): Promise<{ success: boolean, message: string }> {
 
@@ -182,3 +183,76 @@ export async function deleteChatHead(userId: string, chatId: string): Promise<{ 
 
 }
 
+
+export async function addMemory(userId: string, chatId: string, memory: Memory): Promise<{ success: boolean, message: string }> {
+
+    const response = await fetch(`http://localhost:3001/addMemory/${userId}/${chatId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mem_id: memory.mem_id, context: memory.context, tags: memory.tags }),
+    });
+
+    if(!response.ok)
+    {
+        console.error("❌ Failed to add memory");
+        return {
+            success: false,
+            message: await response.text()
+        };
+    }
+
+    console.log("✅ Memory Added");
+    return {
+        success: true,
+        message: "Memory Added"
+    };
+
+}
+
+export async function fetchMemories(userId:string, chatId:string): Promise<{ success: boolean, message: string | Memory[] }> {
+
+    const response = await fetch(`http://localhost:3001/memories/${userId}/${chatId}`);
+
+    if(!response.ok)
+    {
+        console.error("❌ Failed to fetch memories");
+        return {
+            success: false,
+            message: await response.text()
+        };
+    }
+
+    console.log("✅ Memories Fetched");
+    return {
+        success: true,
+        message: await response.json()
+    };
+
+}
+
+
+export async function deleteMemory(userId:string, chatId:string, memoryId:string): Promise<{ success: boolean, message: string }> {
+
+    const response = await fetch(`http://localhost:3001/delMemory/${userId}/${chatId}/${memoryId}`, {
+        method: 'DELETE'
+    });
+
+    if(!response.ok)
+    {
+        console.error("❌ Failed to delete memory");
+        return {
+            success: false,
+            message: await response.text()
+        };
+    }
+
+
+    console.log("✅ Memory Deleted");
+    return {
+        success: true,
+        message: "Memory Deleted"
+    };
+   
+}
