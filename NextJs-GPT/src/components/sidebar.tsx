@@ -27,10 +27,23 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const menuPositionClass = 'absolute top-0 right-0 mt-1';
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [chatIdToDelete, setChatIdToDelete] = useState<string | null>(null);
+
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const savedScroll = sessionStorage.getItem("sidebarScroll");
+    if (savedScroll && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = parseInt(savedScroll, 10);
+    }
+  }, []);
+
+  const handleScroll = () => {
+    const scrollTop = scrollContainerRef.current?.scrollTop || 0;
+    sessionStorage.setItem("sidebarScroll", scrollTop.toString());
+  };
 
   const handleMenuToggle = (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
@@ -51,18 +64,29 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div className="w-72 bg-gray-950 border-r border-gray-800 rounded-xl shadow-lg mr-4 p-4 flex flex-col h-[calc(100vh-2rem)]">
-        <h2 className="text-2xl font-bold mb-6 text-white tracking-tight">Chats</h2>
-        <div ref={scrollContainerRef} className="flex flex-col space-y-3 overflow-y-auto custom-scrollbar pr-1">
+      <div className="w-72 h-full flex flex-col bg-gray-950 border-r border-gray-800 rounded-xl shadow-lg mr-4 overflow-hidden">
+        {/* Top static content */}
+        <div className="flex-shrink-0 p-4">
+          <h2 className="text-2xl font-bold mb-6 text-white tracking-tight">
+            Chats
+          </h2>
           <button
             onClick={onNewChat}
             className="w-full text-left p-4 rounded-lg bg-gradient-to-r from-violet-600 to-purple-800 hover:scale-105 transition duration-200 shadow-md mt-2 border border-violet-500"
             aria-label="Start new chat"
           >
             <p className="font-semibold text-lg text-white">+ New Chat</p>
-            <p className="text-sm text-violet-100 truncate mt-1">Start a fresh conversation.</p>
+            <p className="text-sm text-violet-100 truncate mt-1">
+              Start a fresh conversation.
+            </p>
           </button>
+        </div>
 
+        {/* Scrollable chat list */}
+        <div
+          ref={scrollContainerRef}
+          className="flex-grow overflow-y-auto p-4 space-y-3 custom-scrollbar"
+          onScroll={handleScroll}>
           {chatHeads.map((chat) => (
             <div key={chat.chatId} className="relative group">
               <div
@@ -127,60 +151,50 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ))}
         </div>
-
-        {/* Custom Scrollbar Styles */}
-        <style>{`
-          .custom-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-          }
-          .custom-scrollbar::-webkit-scrollbar {
-            display: none;
-          }
-          @keyframes scaleIn {
-            from {
-              transform: scale(0.95);
-              opacity: 0;
-            }
-            to {
-              transform: scale(1);
-              opacity: 1;
-            }
-          }
-          .animate-scaleIn {
-            animation: scaleIn 0.2s ease-out forwards;
-          }
-        `}</style>
       </div>
+
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .custom-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        @keyframes scaleIn {
+          from {
+            transform: scale(0.95);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        .animate-scaleIn {
+          animation: scaleIn 0.2s ease-out forwards;
+        }
+      `}</style>
 
       {/* Confirmation Modal */}
       {showConfirmModal && chatIdToDelete && (
-        // Outer overlay for centering and background dimming
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 sm:p-6">
-          {/* Modal content container */}
           <div className="bg-gray-900 p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border border-gray-700
-                          transform transition-all duration-300 scale-95 opacity-0 animate-scaleIn">
-            {/* Modal Title */}
+                        transform transition-all duration-300 scale-95 opacity-0 animate-scaleIn">
             <h2 className="text-2xl font-bold text-white mb-3">Delete Chat?</h2>
-
-            {/* Modal Description */}
             <p className="text-gray-400 text-base mb-8 leading-relaxed">
               Are you sure you want to delete this chat? This action is irreversible.
             </p>
-
-            {/* Action Buttons */}
             <div className="flex justify-center space-x-4">
-              {/* Cancel Button */}
               <button
                 onClick={() => setShowConfirmModal(false)}
                 className="px-6 py-2 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium
-                           transition-all duration-200 ease-in-out
-                           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-gray-500"
+                          transition-all duration-200 ease-in-out
+                          focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-gray-500"
               >
                 Cancel
               </button>
-
-              {/* Delete Button */}
               <button
                 onClick={() => {
                   onDelete(chatIdToDelete);
@@ -188,8 +202,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                   setChatIdToDelete(null);
                 }}
                 className="px-6 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold
-                           transition-all duration-200 ease-in-out
-                           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-red-500"
+                          transition-all duration-200 ease-in-out
+                          focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-red-500"
               >
                 Delete
               </button>

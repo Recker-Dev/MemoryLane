@@ -410,9 +410,10 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="grid grid-rows-[auto,1fr] h-screen bg-black text-white font-geist-sans">
+    <div className="flex flex-col h-full w-full">
       <Header />
-      <div className="h-full bg-black text-white flex p-4 font-geist-sans">
+
+      <div className="flex flex-grow overflow-hidden p-4">
         <Sidebar
           chatHeads={chatHeads}
           activeChatId={activeChatId}
@@ -423,7 +424,7 @@ export default function ChatPage() {
 
         <div
           className={clsx(
-            "flex flex-col flex-grow bg-gray-900 rounded-xl shadow-2xl", // Removed h-[calc(100vh-2rem)] and p-4
+            "flex flex-col flex-grow bg-gray-900 rounded-xl shadow-2xl",
             "border border-gray-700 relative overflow-hidden"
           )}
         >
@@ -433,7 +434,7 @@ export default function ChatPage() {
             className={clsx(
               "absolute inset-0 z-20 pointer-events-none overflow-hidden rounded-xl transition-all duration-300",
               isLoadingMessages && activeChatId &&
-              "bg-[radial-gradient(...)] bg-black/30 backdrop-blur-sm animate-pulse"
+              "bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.08),transparent_40%),radial-gradient(circle_at_80%_70%,rgba(255,255,255,0.08),transparent_40%)] bg-black/30 backdrop-blur-sm animate-pulse"
             )}
           />
 
@@ -459,9 +460,12 @@ export default function ChatPage() {
           ) : (
             <div className="flex flex-col items-center justify-center flex-grow text-center z-10">
               <div className="text-5xl mb-4">👋</div>
-              <h2 className="text-2xl font-bold text-white">Welcome to Your AI Chat</h2>
+              <h2 className="text-2xl font-bold text-white">
+                Welcome to Your AI Chat
+              </h2>
               <p className="text-gray-400 mt-2 max-w-md">
-                Select a conversation from the sidebar to continue, or create a new one to get started. 😉
+                Select a conversation from the sidebar to continue, or create a
+                new one to get started. 😉
               </p>
             </div>
           )}
@@ -474,7 +478,5 @@ export default function ChatPage() {
         />
       </div>
     </div>
-    // </div>
-
   );
 }
