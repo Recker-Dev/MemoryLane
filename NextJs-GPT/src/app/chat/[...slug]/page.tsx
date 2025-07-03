@@ -11,17 +11,25 @@ import { useParams, notFound, useRouter } from 'next/navigation';
 import { type MessageBubbleProps } from '@/components/messageBubble';
 import ChatWindow from '@/components/chatWindow';
 import ChatMemoriesDropdown, { Memory } from '@/components/chatMemoriesDropdown'; // Import the new component
-import ChatInput from '@/components/chatInput';
+import ChatInput from '@/components/widgets/chatInput';
 import Sidebar, { type ChatHead } from '@/components/sidebar';
 import { NewChatModal } from '@/components/newChat';
 
 import { useChatStore } from '@/lib/stores/chatStore';
-import { fetchChatHeads, fetchMessages, getAiResponse, createNewChatHead, pushToPendingMessages, deleteChatHead } from '@/lib/chatServices';
-import { addMemory, fetchMemories, deleteMemory } from '@/lib/chatServices';
+
+
+import { addMemory, getMemories, deleteMemory, fetchRelevantMemories } from '@/lib/chatServices';
 
 import toast from 'react-hot-toast';
 
+import { handleSubmission } from '@/features/chat/hardcore-business-logic/handleInputSubmission';
+import { useSyncUserSession } from '@/features/chat/custom-hooks/useSyncUserSession';
+import { useSyncActiveChatId } from '@/features/chat/custom-hooks/useSyncActiveChatId';
+import { useFetchChatHeads } from '@/features/chat/custom-hooks/useFetchChatHeads';
+import { useChatContentLoader } from '@/features/chat/custom-hooks/useChatContentLoader';
+import { useChatCRUD } from '@/features/chat/custom-hooks/useChatCRUD';
 
+import { useDeleteChatMemory } from '@/features/memory/custom-hooks/useDeleteChatMemory';
 
 // This component provides the basic UI framework for a chat screen,
 // now with a full-width background, a wider and centered inner content area,
@@ -34,380 +42,135 @@ export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
 
+
+  // Zustand Store Values
   const userId = useChatStore((state) => state.userId);
   const setUserId = useChatStore((state) => state.setUserId);
-
   const chatHeads = useChatStore((state) => state.chatHeads);
   const setChatHeads = useChatStore((state) => state.setChatHeads);
   const addChatHead = useChatStore((state) => state.addChatHead);
   const removeChatHead = useChatStore((state) => state.removeChatHead);
+  const allChats = useChatStore((state) => state.allChats);
+  const appendChatMessages = useChatStore((state) => state.appendChatMessages);
+  const setAllChatMessages = useChatStore((state) => state.setAllChatMessages);
+  const reset = useChatStore((state) => state.reset);
+  
 
+  const [isUserSynced, setIsUserSynced] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const allChats = useChatStore((state) => state.allChats);
-
-  // const pendingMessages = useChatStore((state) => state.pendingMessages);
   const [inputText, setInputText] = useState('');
   const [isProcessingInput, setIsProcessingInput] = useState(false);
+
+  
+
+  
   // =================================================================================
 
   const path = Array.isArray(params.slug) ? params.slug : [];
   const userIdFromRoute = path[0];
-  const chatId = path[1];
+  const chatIdFromRoute = path[1];
 
 
   const [memories, setMemories] = useState<Memory[]>([]);
 
 
+  // Syncing User
+  useSyncUserSession({
+    userIdFromRoute,
+    userId,
+    setUserId,
+    setIsUserSynced,
+    reset
+  });
 
-  useEffect(() => {
-    if (userIdFromRoute && (userId !== userIdFromRoute)) {
-      setUserId(userIdFromRoute);
-      setChatHeads([]);
-      useChatStore.getState().setAllChatMessages(userIdFromRoute, []);
-    }
-  }, [userIdFromRoute, userId, setUserId, setChatHeads]);
-
-
-  // Do a 1 time initial api call, to grab the chatHeads.
-  // Fetch chat heads when the user ID changes. This is critical for handling account switches.
-  useEffect(() => {
-    if (!userId || useChatStore.getState().chatHeads.length > 0) return;
-    fetchChatHeads(userId).then(response => {
-
-      if (response.success) {
-        if (Array.isArray(response.message))
-          setChatHeads(response.message);
-      }
-      else {
-        toast.error("Error Fetching chats-heads!");
-      }
-    });
-  }, [userId, setChatHeads]);
+  // Syncing ChatId
+  useSyncActiveChatId({
+    chatIdFromRoute,
+    setActiveChatId
+  });
 
 
+  // Fetch Chat Heads for current userId and store it.
+  useFetchChatHeads({
+    userId,
+    isUserSynced,
+    chatHeads,
+    setChatHeads,
+  });
 
-  // Set activeChatId if there is a chatId or else let it be null
-  useEffect(() => {
-    // Set activeChatId if there is a chatId or else let it be null
-    if (chatId) {
-      setActiveChatId(chatId);
-    } else {
-      setActiveChatId(null);
-    }
-  }, [chatId]); // Only re-run this effect if chatId changes
-
-
-  // Fetch messages and chat memories when activeChatId changes, but ONLY if activeChatId is valid
-
-  useEffect(() => {
-
-    if (!activeChatId || !userId) return;
-
-    setIsLoadingMessages(true);  // Begin loading animation
-
-    // MESSAGE FETCH
-
-    fetchMessages(userId, activeChatId).then(response => {
-      if (response.success) {
-        if (Array.isArray(response.message)) {
-          useChatStore.getState().setAllChatMessages(activeChatId, response.message); // Use setAllChatMessages to replace history
-        }
-      }
-      else {
-        toast.error("Error Fetching chat-history for the current chat!");
-        router.push(`/chat/${userId}`);
-      }
-    }).finally(() => {
-      setTimeout(() => {
-        setIsLoadingMessages(false);
-      }, 500);
+  // Load Chat Content for selected userId/chatId 
+  useChatContentLoader(
+    {
+      isUserSynced,
+      userId,
+      activeChatId,
+      setMemories,
+      setIsLoadingMessages,
+      setAllChatMessages,
     });
 
 
-    // MEMORY FETCH 
-    fetchMemories(userId, activeChatId).then(response => {
-      if (response.success) {
-        if (Array.isArray(response.message)) {
-          setMemories(response.message);
-        }
-      }
-      else {
-        toast.error("Error Fetching chat-memories for the current chat!");
-      }
+  // Diverting business logic of user-chat-submission, ai-response and db updation.
+  const onInputSubmit = async (
+    event: React.FormEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (!userId || !activeChatId) return;
+    event.preventDefault()
+    await handleSubmission({
+      inputText,
+      userId,
+      activeChatId,
+      setInputText,
+      setIsProcessingInput,
+      setMemories,
+      appendChatMessages,
     });
-
-
-
-  }, [activeChatId, userId, router]); // 🔁 Always fetch on route change
-
-
-  function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setInputText(event.currentTarget.value);
-  }
-
-
-
-  const handleChatMem = async (userInput: string) => {
-
-    if (!activeChatId || !userId) return;
-
-    const CHATMEm_REGEX = /^\/chatmem\s+context\s*=\s*"([^"]*)"(?:\s+tags\(Optional\)\s*=\s*"([^"]*)")?$/;
-
-    const match = userInput.match(CHATMEm_REGEX);
-
-    if (!match) {
-      console.log("handleChatMem: No match for /chatmem regex.");
-      toast.error("Stick to the boiler-plate text for creating chat memory. Fill the relevant fields only.")
-      return false;
-    }
-
-    const context = match[1] || "";
-    const tagsString = match[2] || "";
-
-    // The user inputs tags as a comma-separated string. We need to split it into an array.
-    const tagsArray = tagsString ? tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : [];
-
-
-
-    console.log("✅ /chatmem command detected!");
-    console.log("Context:", context);
-    console.log("Tags:", tagsArray);
-
-    const newChatMemory: Memory = {
-      mem_id: uuidv4(), context: context, tags: tagsArray
-    };
-
-    const response = await addMemory(userId, activeChatId, newChatMemory);
-
-    if (response.success) {
-      return true;
-    }
-    else {
-      toast.error("Failed to add memory.");
-      return false;
-    }
-
-
-  }
-
-
-
-  const handleSubmission = async (event: React.FormEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => {
-    event.preventDefault();
-
-    const trimmedOutput = inputText.trim();
-
-    if (!trimmedOutput || !activeChatId || !userId) return;
-
-
-    // NEW → Check if this is a /chatmem command
-    if (trimmedOutput.startsWith("/chatmem")) {
-      const handled = await handleChatMem(trimmedOutput);
-      setInputText('');
-
-      if (!handled) {
-        // toast.error("Stick to the boiler-plate text for creating chat memory. Fill the relevant fields only.")
-        return;
-      }
-      // toast.success("Succesfully created memory, use /fetch to explicitly use memories in further chat context.")
-
-      // Update memories
-      fetchMemories(userId, activeChatId).then(response => {
-        if (response.success) {
-          if (Array.isArray(response.message)) {
-            setMemories(response.message);
-            toast.success("Chat Memory Succesfully added and updated!");
-          }
-        }
-        else {
-          toast.error("Error Fetching updated chat-memories!");
-        }
-      });
-      return;
-    }
-
-    const newUserMessage: MessageBubbleProps = {
-      id: uuidv4(), sender: 'user', text: trimmedOutput
-    };
-
-    // Add user message to redundacy DB
-    const userMssgPendingResponse = await pushToPendingMessages(userId, activeChatId, newUserMessage)
-    if (!userMssgPendingResponse.success) {
-      toast.error("Failed to save user message to server.");
-      return;
-    }
-
-    // Handle chat updation of UI
-    useChatStore.getState().appendChatMessages(activeChatId, [newUserMessage]); // Use appendChatMessages for new user message
-
-
-    // useChatStore.getState().appendPendingMessage(activeChatId, newUserMessage);
-    setInputText('');
-    setIsProcessingInput(true);
-
-    const aiMssgResponse = await getAiResponse(userId, activeChatId, trimmedOutput)
-
-    if (aiMssgResponse.success) {
-      const aiMessage = aiMssgResponse.message;
-      const aiMessageId = uuidv4();
-      aiMessage.id = aiMessageId;
-
-      // Handle chat updation of UI
-      useChatStore.getState().appendChatMessages(activeChatId, [aiMessage]); // Use appendChatMessages for new AI message
-
-      setTimeout(async () => { // Simulate a network delay.
-        // useChatStore.getState().appendPendingMessage(activeChatId, { ...aiMessage, id: aiMessageId });
-
-        // Add ai message to redundacy DB
-        const aiMssgPendingResponse = await pushToPendingMessages(userId, activeChatId, aiMessage)
-        if (!aiMssgPendingResponse.success) {
-          toast.error("Failed to save AI message to server.");
-        }
-
-        setIsProcessingInput(false);
-      }, 200);
-
-    } else {
-      toast.error(`Failed to get AI response: ${aiMssgResponse.message}`);
-      setIsProcessingInput(false); // Stop processing on API error
-    }
-
-
   };
 
 
-  const handleSelectChat = useCallback(async (chatId: string) => {
-
+  // Route to selected chatId 
+  const handleSelectChat = useCallback((chatId: string) => {
     if (!userId) return;
-
-    // Return if clicked chat is having same id as activeChatId
     if (activeChatId === chatId) return;
 
-
     setActiveChatId(chatId);
-    // Simulate router navigation for local environment
     router.push(`/chat/${userId}/${chatId}`);
-  }, [userId, router, activeChatId]);
+  }, [userId, activeChatId, setActiveChatId, router]);
+
+
+  // Handles Logic of creation and deletion of chat-heads and subsequent chat-history.
+  const { createChatHead, deleteChatHead } = useChatCRUD({
+    isUserSynced,
+    userId,
+    activeChatId,
+    setActiveChatId,
+    addChatHead,
+    removeChatHead,
+    setInputText,
+    setShowNewChatModal,
+  });
 
 
 
-  const handleNewChat = useCallback(() =>
-    setShowNewChatModal(true), [setShowNewChatModal]);
-
-
-
-  useEffect(() => {
-    console.log("chatHeads updated:", chatHeads);
-  }, [chatHeads]);
-
-  const handleCreateNewChat = useCallback(async (newchatName: string) => {
-    if (!userId) return;
-
-    // // 1. Sync pending messages from the current chat, given we have activeChatId valid.
-    // if (activeChatId) {
-    //   const pendingMessages = useChatStore.getState().pendingMessages[activeChatId] || [];
-    //   const data = await updatePendingMessages(userId, activeChatId, pendingMessages);
-
-    //   if (data.success) {
-    //     useChatStore.getState().clearPendingMessages(activeChatId);
-    //   } else {
-    //     toast.error("Failed to sync messages from the previous chat.");
-    //   }
-    // }
-
-    const newChatId = uuidv4();
-    const newChatHead: ChatHead = {
-      chatId: newChatId,
-      name: newchatName,
-      preview: 'No messages yet.',
-    };
-
-    // 2. Optimistic UI update
-    addChatHead(newChatHead);
-    setInputText('');
-    setShowNewChatModal(false); // ✅ Close the modal now to feel instant
-
-    // 3. Wait for DB sync before navigating
-    const response = await createNewChatHead(userId, newChatHead);
-
-    if (!response.success) {
-      removeChatHead(newChatHead.chatId);
-      toast.error(response.message || "Failed to sync chat head with server.");
-      return;
-    }
-
-    // 4. Route after chat creation is confirmed
-    setActiveChatId(newChatId);
-    router.push(`/chat/${userId}/${newChatId}`);
-    console.log("✅ New Chat created:", newChatId, newchatName);
-
-  }, [userId, router, addChatHead, removeChatHead]);
-
-
-  const handleChatHeadDelete = useCallback(async (chatId: string) => {
-
-    if (!userId) return;
-
-    const response = await deleteChatHead(userId, chatId);
-
-    if (!response.success) {
-      toast.error(response.message || "Failed to delete chat-head");
-      return;
-    }
-
-    if (response.success) {
-      removeChatHead(chatId);
-      toast.success(response.message);
-      if (chatId === activeChatId) {
-        setActiveChatId(null);
-        router.push(`/chat/${userId}`); // Push Back to base homepage
-      }
-    }
-
-  }, [userId, router, activeChatId, removeChatHead]);
-
-  const handleDeleteMemoryClick = async (memoryId: string) => {
-    // console.log("Delete memory clicked for ID:", memoryId);
-
-    if (!userId || !activeChatId) return;
-
-    const response = await deleteMemory(userId, activeChatId, memoryId);
-
-    if (!response.success) {
-      toast.error(response.message || "Failed to delete memory");
-      return;
-    }
-
-    if (response.success) {
-      toast.success(response.message || "Succesfully deleted memory");
-
-      // Perform Optimistic UI update
-      setMemories((prevMemories) =>
-        prevMemories.filter((memory) => memory.mem_id !== memoryId));
-
-    };
-  }
-
+  const handleDeleteMemoryClick = useDeleteChatMemory({
+    userId,
+    activeChatId,
+    setMemories,
+  })
 
   const currentMessages = [
     ...(allChats[activeChatId || ''] || []),
-    // ...(pendingMessages[activeChatId || ''] || []),
   ];
 
 
-  // useEffect(() => {
-  //   console.log("Updated Pending Messages, to be synced : ", useChatStore.getState().pendingMessages);
-  // }, [pendingMessages]);
 
-
-  // ✅ Do this check AFTER all hooks
-  if (!userIdFromRoute) {
-    notFound(); // still works here in Next.js
-    // return null;
-  }
+  // // ✅ Do this check AFTER all hooks
+  // if (!userIdFromRoute) {
+  //   notFound(); // still works here in Next.js
+  //   // return null;
+  // }
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -418,8 +181,8 @@ export default function ChatPage() {
           chatHeads={chatHeads}
           activeChatId={activeChatId}
           onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
-          onDelete={handleChatHeadDelete}
+          onNewChat={() => { setShowNewChatModal(true); }}
+          onDelete={deleteChatHead}
         />
 
         <div
@@ -434,11 +197,11 @@ export default function ChatPage() {
             className={clsx(
               "absolute inset-0 z-20 pointer-events-none overflow-hidden rounded-xl transition-all duration-300",
               isLoadingMessages && activeChatId &&
-              "bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.08),transparent_40%),radial-gradient(circle_at_80%_70%,rgba(255,255,255,0.08),transparent_40%)] bg-black/30 backdrop-blur-sm animate-pulse"
+              "opacity-100 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.08),transparent_40%),radial-gradient(circle_at_80%_70%,rgba(255,255,255,0.08),transparent_40%)] bg-black/30 backdrop-blur-sm animate-pulse"
             )}
           />
 
-          {activeChatId ? (
+          {activeChatId && !isLoadingMessages ? (
             <>
               <ChatMemoriesDropdown
                 memories={memories}
@@ -446,13 +209,13 @@ export default function ChatPage() {
               />
               <div className="flex flex-col w-full max-w-5xl mx-auto flex-grow min-h-0 z-10">
                 <ChatWindow
-                  messages={isLoadingMessages ? null : currentMessages}
+                  messages={currentMessages}
                   isProcessingInput={isProcessingInput}
                 />
                 <ChatInput
                   inputText={inputText}
-                  handleInputChange={handleInputChange}
-                  handleSubmission={handleSubmission}
+                  handleInputChange={(event) => { setInputText(event.target.value); }}
+                  handleSubmission={onInputSubmit}
                   isProcessingInput={isProcessingInput}
                 />
               </div>
@@ -469,12 +232,13 @@ export default function ChatPage() {
               </p>
             </div>
           )}
+
         </div>
 
         <NewChatModal
           isOpen={showNewChatModal}
           onClose={() => setShowNewChatModal(false)}
-          onSubmit={handleCreateNewChat}
+          onSubmit={createChatHead}
         />
       </div>
     </div>

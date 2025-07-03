@@ -2,31 +2,26 @@ import { create } from 'zustand'
 import { type ChatHead } from '@/components/sidebar'
 import { type MessageBubbleProps } from '@/components/messageBubble';
 
-interface ChatStore {
+export interface ChatStore {
 
     userId: string | null;
     setUserId: (id: string) => void;
 
-
     chatHeads: ChatHead[];
     setChatHeads: (heads: ChatHead[]) => void;
     addChatHead: (head: ChatHead) => void;
-    resetChatHeads: () => void;
+    
     removeChatHead: (id: string) => void;
-
 
     allChats: Record<string, MessageBubbleProps[]>;
 
     setAllChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // New: to replace history
     appendChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // Renamed: to append new messages
 
-
-
+    reset: () => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
-
-
     userId: null,
     setUserId: (id) => set(() => ({ userId: id })),
 
@@ -40,15 +35,18 @@ export const useChatStore = create<ChatStore>((set) => ({
         })),
 
     removeChatHead: (id) =>
-        set((state) => ({
-            chatHeads: state.chatHeads.filter((chatHead) => chatHead.chatId !== id),
-        })),
+        set((state) => {
+            const newAllChats = { ...state.allChats };
+            delete newAllChats[id]; // Also remove the messages for the deleted chat
+            return {
+                chatHeads: state.chatHeads.filter((chatHead) => chatHead.chatId !== id),
+                allChats: newAllChats,
+            };
+        }),
 
-    resetChatHeads: () => set({ chatHeads: [] }),
-
+    
 
     allChats: {},
-    pendingMessages: {},
 
     // Action to completely replace the messages for a given chatId (e.g., when fetching history)
     setAllChatMessages: (chatId, messages) =>
@@ -71,7 +69,7 @@ export const useChatStore = create<ChatStore>((set) => ({
             if (existingMessages.length === 0 && messages.length > 0) {
                 // Find first USER message (not AI)
                 const firstUserMessage = messages.find((msg) => msg.sender === 'user');
-                if (firstUserMessage) {
+                if (firstUserMessage?.text) {
                     updatedChatHeads = state.chatHeads.map((head) => {
                         if (head.chatId === chatId) {
                             return {
@@ -93,6 +91,10 @@ export const useChatStore = create<ChatStore>((set) => ({
             };
         }),
 
-
-
+    reset: () =>
+        set({
+            userId: null,
+            chatHeads: [],
+            allChats: {},
+        }),
 }));

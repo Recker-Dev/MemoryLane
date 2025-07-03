@@ -98,7 +98,7 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = ({memories,han
         ref={toggleButtonRef}
         onClick={toggleMemoriesDropdown}
         className={clsx(
-          "absolute top-4 left-4 z-30 p-2 rounded-full",
+          "absolute top-4 left-4 z-30 p-2 rounded-full hover:cursor-pointer",
           "bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors duration-200",
           "focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75"
         )}

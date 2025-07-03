@@ -307,8 +307,79 @@ export default async function chatRoutes(fastify, options) {
         return { success: true };
     });
 
+    //11. Method to fetch relevant memories
+    fastify.post('/fetchMemories/:userId/:chatId', async (req, res) => {
+        const { userId, chatId } = req.params;
+        let { mem_ids, tags, current_context } = req.body;
 
-    //11. Method to enter user data in DB
+        if (!userId || !chatId) return res.code(400).send({ error: 'userId and chatId are required' });
+
+        // Load of memories for this chatId and userId
+        const chats = await chatsCollection.findOne(
+            { userId, chatId },
+            { projection: { memory: 1 } }
+        );
+
+        if (!chats) return res.code(404).send({ error: 'Chat not found' });
+
+        let memories = chats.memory || [];
+
+        let memories_from_id = [];
+        let memories_from_tags = [];
+        let memories_from_context = [];
+
+
+        // Filter Mems by mem_id
+        if (mem_ids) {
+            const ids_from_string = mem_ids.split(",").map(id => id.trim());
+            memories_from_id = memories.filter(m => ids_from_string.includes(m.mem_id));
+        }
+
+        // FIlter Mems by tags
+        if (tags) {
+            const tags_from_string = tags.split(",").map(tag => tag.trim());
+            memories_from_tags = memories.filter(m => m.tags.some(t => tags_from_string.includes(t)));
+        }
+
+        // Filet Mems by context
+        if (current_context) {
+            // PLACEHOLDER CODE FOR SIMILARTIY SCORE CHECK IN FUTURE.
+            memories_from_context = []
+        }
+
+        // Combine the memories and eliminate duplicate entries
+        const shortlisted_memories = [
+            ...new Map( // External Spread cuz Map returns an iterator and we want array.
+                [
+                    ...memories_from_id,
+                    ...memories_from_tags,
+                    ...memories_from_context
+                ].map(m => [m.mem_id, m]) // Tuples of tpye [id,memory]
+            ).values() // As id of Map cannot be duplicate, we get the intial one and .values gives us back the memory and not id.
+        ];
+
+        if (shortlisted_memories.length === 0) {
+            return res.code(200).send(
+                {
+                    success: true,
+                    memories: [],
+                    message: "No matching memories found. Proceeding without memory context."
+                }
+            )
+        }
+
+        return res.code(200).send(
+            {
+                success: true,
+                memories: shortlisted_memories,
+                message: `Found ${shortlisted_memories.length} memories matching your criteria.`
+            }
+        )
+
+    });
+
+
+    //12. Method to enter user data in DB
     fastify.post('/registerUser', async (req, res) => {
         const { email, password } = req.body;
 
@@ -331,7 +402,7 @@ export default async function chatRoutes(fastify, options) {
 
     });
 
-    //12. Method to check if user data in DB
+    //13. Method to check if user data in DB
     fastify.post('/validateUser', async (req, res) => {
         const { email, password } = req.body;
 
@@ -339,16 +410,22 @@ export default async function chatRoutes(fastify, options) {
             return res.code(400).send({ error: 'Email and password required' });
         }
 
-        // Check if user data exists
-        const user = await userAuthCollection.findOne({ email: email.toLowerCase(), password });
+
+        // Check if user email exists
+        const user = await userAuthCollection.findOne({ email: email.toLowerCase() });
 
         if (!user) return res.code(400).send({ error: 'User not in DB' });
 
-        return {
+        // Check if passwords match
+        if (user.password != password) {
+            return res.code(400).send({ error: 'Incorrect Password' });
+        }
+
+        res.code(200).send({
             success: true,
             userId: user._id.toString(),
             email: user.email
-        }
+        });
     })
 
 }

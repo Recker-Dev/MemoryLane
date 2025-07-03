@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Image from "next/image";
+import Link from 'next/link';
 
 export default function Header() {
     const router = useRouter();
@@ -27,7 +28,9 @@ export default function Header() {
     };
     return (
         <header className="bg-gray-900 text-white p-3 flex justify-between items-center border-b border-gray-700 shadow-md relative">
-            <h1 className="text-xl font-bold text-gray-200 pl-4">MemoryLane 🧠</h1>
+            <h1 className="text-xl font-bold text-gray-200 pl-4">
+                <Link href="/" className="no-underline text-gray-200 hover:cursor-pointer" >MemoryLane 🧠</Link>
+            </h1>
 
             <div className="relative group">
                 <button

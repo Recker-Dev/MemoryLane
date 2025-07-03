@@ -62,6 +62,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [menuOpenFor]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpenFor(null);
+        setShowConfirmModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
     <>
       <div className="w-72 h-full flex flex-col bg-gray-950 border-r border-gray-800 rounded-xl shadow-lg mr-4 overflow-hidden">
@@ -72,7 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </h2>
           <button
             onClick={onNewChat}
-            className="w-full text-left p-4 rounded-lg bg-gradient-to-r from-violet-600 to-purple-800 hover:scale-105 transition duration-200 shadow-md mt-2 border border-violet-500"
+            className="w-full text-left p-4 rounded-lg bg-gradient-to-r from-violet-600 to-purple-800 hover:scale-105 transition duration-200 shadow-md mt-2 border border-violet-500 hover:cursor-pointer"
             aria-label="Start new chat"
           >
             <p className="font-semibold text-lg text-white">+ New Chat</p>
@@ -188,7 +201,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             </p>
             <div className="flex justify-center space-x-4">
               <button
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setChatIdToDelete(null);
+                }}
                 className="px-6 py-2 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium
                           transition-all duration-200 ease-in-out
                           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-gray-500"

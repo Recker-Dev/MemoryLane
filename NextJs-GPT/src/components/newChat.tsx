@@ -1,4 +1,4 @@
-import React, { useState, } from 'react';
+import React, { useState,useEffect } from 'react';
 // --- NewChatModal Component ---
 interface NewChatModalProps {
   isOpen: boolean;
@@ -8,6 +8,22 @@ interface NewChatModalProps {
 
 export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const [chatName, setChatName] = useState('');
+
+  useEffect(()=> {
+    const handleKeyDown = (event:KeyboardEvent) => {
+      if (event.key === 'Escape')
+      {
+        onClose();
+      }
+    };
+    if (isOpen)
+    {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null; // Don't render if not open
 
