@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse,  } from "next/server";
-import { validateUser } from "@/lib/authServices";
-import { createJWT } from "@/lib/jwt";
+import { validateUser } from "@/lib/auth/authServices";
+import { createJWT } from "@/lib/auth/jwt";
 import { cookies } from "next/headers";
 
 interface AuthError {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { registerUser } from "@/lib/authServices";
+import { registerUser } from "@/lib/auth/authServices";
 
 interface AuthError {
   message: string;

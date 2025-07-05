@@ -1,11 +1,8 @@
 import { create } from 'zustand'
-import { type ChatHead } from '@/components/sidebar'
-import { type MessageBubbleProps } from '@/components/messageBubble';
+import { type ChatHead } from '@/components/widgets/Sidebar'
+import { type MessageBubbleProps } from '@/components/ui/MessageBubble';
 
-export interface ChatStore {
-
-    userId: string | null;
-    setUserId: (id: string) => void;
+export type ChatStore = {
 
     chatHeads: ChatHead[];
     setChatHeads: (heads: ChatHead[]) => void;
@@ -22,8 +19,7 @@ export interface ChatStore {
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
-    userId: null,
-    setUserId: (id) => set(() => ({ userId: id })),
+
 
     chatHeads: [],
 
@@ -93,7 +89,6 @@ export const useChatStore = create<ChatStore>((set) => ({
 
     reset: () =>
         set({
-            userId: null,
             chatHeads: [],
             allChats: {},
         }),

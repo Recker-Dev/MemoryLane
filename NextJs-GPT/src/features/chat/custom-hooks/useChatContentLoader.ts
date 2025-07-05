@@ -2,8 +2,10 @@ import { useEffect } from "react";
 import toast from "react-hot-toast";
 import { fetchMessages, getMemories } from "@/lib/chatServices";
 import { useRouter } from "next/navigation";
-import { Memory } from "@/components/chatMemoriesDropdown";
-import { MessageBubbleProps } from "@/components/messageBubble";
+
+import { useUserStateStore } from "@/lib/stores/useUserStateStore";
+import { useChatStore } from "@/lib/stores/useChatStore";
+import { useMemoryStore } from "@/lib/stores/useMemoryStore";
 
 /**
  * Custom hook that fetches chat messages and memory data
@@ -21,23 +23,22 @@ import { MessageBubbleProps } from "@/components/messageBubble";
  */
 
 export function useChatContentLoader(args: {
-    isUserSynced: boolean;
-    userId: string | null;
-    activeChatId: string | null;
-    setMemories: (value: React.SetStateAction<Memory[]>) => void;
     setIsLoadingMessages: (value: React.SetStateAction<boolean>) => void;
-    setAllChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void;
 }) {
     const {
-        userId,
-        activeChatId,
-        isUserSynced,
-        setMemories,
         setIsLoadingMessages,
-        setAllChatMessages,
     } = args;
 
     const router = useRouter();
+
+    const userId = useUserStateStore((state) => state.userId);
+    const isUserSynced = useUserStateStore((state) => state.isUserSynced);
+    const activeChatId = useUserStateStore((state) => state.activeChatId);
+
+    const setAllChatMessages = useChatStore((state) => state.setAllChatMessages);
+    
+    const setMemories = useMemoryStore((state) => state.setChatMemories);
+
 
     useEffect(() => {
         if (!isUserSynced) return;
@@ -71,6 +72,7 @@ export function useChatContentLoader(args: {
             try {
                 const response = await getMemories(userId, activeChatId);
                 if (response.success && Array.isArray(response.message)) {
+                    console.log(response.message);
                     setMemories(response.message);
                 } else {
                     toast.error("Error fetching chat memories.");

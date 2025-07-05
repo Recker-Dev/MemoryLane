@@ -1,6 +1,10 @@
-'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
+
+import { useDeleteChatMemory } from '@/features/memory/custom-hooks/useDeleteChatMemory';
+
+import { useMemoryStore } from '@/lib/stores/useMemoryStore';
+
 
 // Define the type for a single memory
 export type Memory = {
@@ -9,56 +13,20 @@ export type Memory = {
   tags: string[];
 }
 
-// // Mock data for memories
-// const mockMemories: Memory[] = [
-//   {
-//     id: 'mem_abc123',
-//     context: 'Remember to ask about deadlines for the Q3 project. Important for planning.',
-//     tags: ['work', 'project', 'deadlines']
-//   },
-//   {
-//     id: 'mem_def456',
-//     context: 'Client prefers dark mode interfaces with subtle animations and rounded corners.',
-//     tags: ['design', 'client_pref', 'UI', 'UX']
-//   },
-//   {
-//     id: 'mem_ghi789',
-//     context: 'Team stand-up every Tuesday and Thursday at 10 AM PST. Be prepared with updates.',
-//     tags: ['meeting', 'schedule', 'team']
-//   },
-//   {
-//     id: 'mem_jkl012',
-//     context: 'New authentication flow requires two-factor authentication via email link. Prioritize implementation.',
-//     tags: ['security', 'auth', 'development']
-//   },
-//   {
-//     id: 'mem_mno345',
-//     context: 'Consider using a micro-frontend architecture for scalability on the new module.',
-//     tags: ['architecture', 'scalability', 'tech_debt']
-//   },
-//   {
-//     id: 'mem_pqr678',
-//     context: 'Feedback from last demo: improve responsiveness on mobile devices, especially on smaller screens.',
-//     tags: ['feedback', 'mobile', 'responsive']
-//   },
-//   {
-//     id: 'mem_stu901',
-//     context: 'The deployment pipeline has a manual approval step for production releases. Do not forget.',
-//     tags: ['devops', 'deployment', 'process']
-//   },
-// ];
 
-interface ChatMemoriesDropdownProps {
-  // No props needed for now as it uses mock data and logs delete.
-  // If integrated with real data, it would need userId, chatId, and a way to fetch/delete memories.
-  memories: Memory[];
-  handleDeleteMemoryClick: (memoryId: string) => void;
-}
+type ChatMemoriesDropdownProps ={}
 
-const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = ({memories,handleDeleteMemoryClick}) => {
-  const [showMemoriesDropdown, setShowMemoriesDropdown] = useState(false);
-  // const [memories, setMemories] = useState<Memory[]>([]);
+const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
+
   
+  ////////// GLOBAL states //////////
+  const memories = useMemoryStore((state) => state.chatMemories);
+  
+  ////////// CUSTOM HOOK ///////////
+  const handleDeleteMemoryClick = useDeleteChatMemory()
+
+  ////////// COMPONENT states //////////
+  const [showMemoriesDropdown, setShowMemoriesDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
 

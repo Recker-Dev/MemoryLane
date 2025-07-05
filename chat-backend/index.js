@@ -7,7 +7,7 @@ import { flushPendingMessagesToChats } from './cron.js';
 const fastify = Fastify({ logger: true });
 
 await fastify.register(cors, {
-  origin: ['http://localhost:3000', 'http://localhost:3002'],
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // ✅ Add all methods to be used!
 });

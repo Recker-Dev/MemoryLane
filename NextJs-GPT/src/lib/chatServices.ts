@@ -1,6 +1,6 @@
-import { type ChatHead } from '@/components/sidebar';
-import { type MessageBubbleProps } from '@/components/messageBubble';
-import { type Memory } from '@/components/chatMemoriesDropdown';
+import { type ChatHead } from '@/components/widgets/Sidebar';
+import { type MessageBubbleProps } from '@/components/ui/MessageBubble';
+import { type Memory } from '@/components/widgets/ChatMemoriesDropdown';
 
 
 export async function fetchChatHeads(userId: string): Promise<{ success: boolean, message: string | ChatHead[] }> {

@@ -1,18 +1,20 @@
 // CUSTOM HOOK
 
 import { useCallback } from 'react';
-import { Memory } from '@/components/chatMemoriesDropdown';
+import { Memory } from '@/components/widgets/ChatMemoriesDropdown';
 import toast from "react-hot-toast";
 import { deleteMemory } from '@/lib/chatServices';
 
+import { useMemoryStore } from '@/lib/stores/useMemoryStore';
+import { useUserStateStore } from '@/lib/stores/useUserStateStore';
 
-export function useDeleteChatMemory(args: {
-    userId: string | null;
-    activeChatId: string | null;
-    setMemories: (value: React.SetStateAction<Memory[]>) => void;
+export function useDeleteChatMemory() {
 
-}) {
-    const { userId, activeChatId, setMemories } = args;
+    ////// GLOBAL STATES ///////
+    const userId = useUserStateStore((state)=> state.userId);
+    const activeChatId = useUserStateStore((state)=> state.activeChatId);
+
+    const removeMemoryById = useMemoryStore((state) => state.removeMemoryById);
 
     const handleDeleteMemoryClick = useCallback(
         async (memoryId: string) => {
@@ -30,11 +32,9 @@ export function useDeleteChatMemory(args: {
                 toast.success(response.message || "Succesfully deleted memory");
 
                 // Perform Optimistic UI update
-                setMemories((prevMemories) =>
-                    prevMemories.filter((memory) => memory.mem_id !== memoryId));
-
-            };
-        }, [userId, activeChatId, setMemories]);
+                removeMemoryById(memoryId);
+            }
+        }, [userId, activeChatId, removeMemoryById]);
 
     return handleDeleteMemoryClick
 }

@@ -1,5 +1,3 @@
-'use client';
-
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Image from "next/image";
@@ -43,6 +41,7 @@ export default function Header() {
                         alt="Logout"
                         width={24}
                         height={24}
+                        priority
                     />
                 </button>
 

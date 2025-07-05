@@ -1,8 +1,7 @@
 // CUSTOM HOOK
 
 import { useEffect } from 'react';
-import { UseBoundStore, StoreApi } from "zustand";
-import { ChatStore } from "@/lib/stores/chatStore";
+import { useUserStateStore } from '@/lib/stores/useUserStateStore';
 
 
 /**
@@ -21,10 +20,11 @@ import { ChatStore } from "@/lib/stores/chatStore";
 
 export function useSyncActiveChatId(args: {
     chatIdFromRoute: string | null;
-    setActiveChatId: (id: string | null) => void;
 
 }) {
-    const { chatIdFromRoute, setActiveChatId } = args;
+    const { chatIdFromRoute } = args;
+
+    const setActiveChatId = useUserStateStore((state) => state.setActiveChatId);
 
     useEffect(() => {
         if (chatIdFromRoute) {

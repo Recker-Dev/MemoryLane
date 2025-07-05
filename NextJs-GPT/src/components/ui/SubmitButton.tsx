@@ -2,9 +2,9 @@ import clsx from "clsx";
 
 interface SubmitButtonProps {
     isProcessingInput: boolean;
-    handleSubmission: (event: React.FormEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>)  => void;
+    onInputSubmit: (event: React.FormEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) => Promise<void>
 }
-export const SubmitButton: React.FC<SubmitButtonProps> = ({ isProcessingInput, handleSubmission }) => {
+export const SubmitButton: React.FC<SubmitButtonProps> = ({ isProcessingInput, onInputSubmit }) => {
     return (
         <button
             className={clsx(
@@ -16,7 +16,7 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({ isProcessingInput, h
                 "active:scale-95"
             )}
             aria-label="Send message"
-            onClick={handleSubmission}
+            onClick={onInputSubmit}
             disabled={isProcessingInput}
         >
             {/* Arrow up SVG */}

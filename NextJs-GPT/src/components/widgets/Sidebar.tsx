@@ -1,7 +1,11 @@
-'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import clsx from 'clsx';
 import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ConfirmChatDeleteModal } from '@/components/widgets/ConfimChatDeleteModal';
+
+import { useChatStore } from '@/lib/stores/useChatStore';
+import { useUserStateStore } from '@/lib/stores/useUserStateStore';
 
 export type ChatHead = {
   chatId: string;
@@ -10,75 +14,102 @@ export type ChatHead = {
 };
 
 type SidebarProps = {
-  chatHeads: ChatHead[];
-  activeChatId: string | null;
-  onSelectChat: (chatId: string) => void;
-  onDelete: (chatId: string) => void;
   onNewChat: () => void;
 };
 
 const Sidebar: React.FC<SidebarProps> = ({
-  chatHeads,
-  activeChatId,
-  onSelectChat,
-  onDelete,
   onNewChat,
 }) => {
-  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
-  const menuPositionClass = 'absolute top-0 right-0 mt-1';
-  const menuRef = useRef<HTMLDivElement | null>(null);
 
+  const router = useRouter();
+
+  //////////// GLOBAL States ///////////
+
+  const userId = useUserStateStore((state) => state.userId);
+  const activeChatId = useUserStateStore((state) => state.activeChatId);
+  const setActiveChatId = useUserStateStore((state) => state.setActiveChatId);
+
+  const chatHeads = useChatStore((state) => state.chatHeads);
+
+  /////////// COMPONENT States ///////////
+
+  // Tracks which chatId currently has the kebab menu open.
+  // null = no menu open
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+
+  // Whether the confirm-delete modal is visible.
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Tracks which chatId is pending deletion (passed into modal).
   const [chatIdToDelete, setChatIdToDelete] = useState<string | null>(null);
 
+  // Ref to the menu element for outside-click detection.
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Ref to the chat list scroll container, for persisting scroll position across reloads.
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
+
   useEffect(() => {
+    // Check if there’s a previously saved scroll position in session storage
     const savedScroll = sessionStorage.getItem("sidebarScroll");
     if (savedScroll && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = parseInt(savedScroll, 10);
+      const val = parseInt(savedScroll, 10);
+      if (!isNaN(val)) {
+        // Restore the scrollTop value so user sees sidebar in same place after page reload
+        scrollContainerRef.current.scrollTop = val;
+      }
     }
-  }, []);
+  }, []); // Runs once when mounted.
 
   const handleScroll = () => {
+    // When the user scrolls the sidebar, save the scrollTop value
     const scrollTop = scrollContainerRef.current?.scrollTop || 0;
     sessionStorage.setItem("sidebarScroll", scrollTop.toString());
   };
 
+
   const handleMenuToggle = (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
+    // Toggle open/close of the menu for a specific chat
     setMenuOpenFor(prev => (prev === chatId ? null : chatId));
   };
 
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node)
+      ) {
+        // User clicked outside the dropdown → close it
         setMenuOpenFor(null);
       }
     };
+
     if (menuOpenFor) {
+      //  If Menu is open → listen for outside clicks
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside); // Runs(when unmounting) if listener was mounted.
     }
   }, [menuOpenFor]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMenuOpenFor(null);
-        setShowConfirmModal(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
+  // Route to selected chatId 
+  const handleSelectChat = useCallback((chatId: string) => {
+    if (!userId) return;
+    if (activeChatId === chatId) return;
+
+    setActiveChatId(chatId);
+    router.push(`/chat/${userId}/${chatId}`);
+    
+  }, [userId, activeChatId, setActiveChatId, router]);
+
+
 
   return (
     <>
       <div className="w-72 h-full flex flex-col bg-gray-950 border-r border-gray-800 rounded-xl shadow-lg mr-4 overflow-hidden">
-        {/* Top static content */}
+        {/* Top static content  OF ADDING NEW CHAT */}
         <div className="flex-shrink-0 p-4">
           <h2 className="text-2xl font-bold mb-6 text-white tracking-tight">
             Chats
@@ -95,18 +126,18 @@ const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Scrollable chat list */}
+        {/* Scrollable chat list OF ACTUAL CHAT HEADS*/}
         <div
           ref={scrollContainerRef}
-          className="flex-grow overflow-y-auto p-4 space-y-3 custom-scrollbar"
+          className="flex-grow overflow-y-auto p-4 space-y-3 scrollbar-hidden"
           onScroll={handleScroll}>
           {chatHeads.map((chat) => (
             <div key={chat.chatId} className="relative group">
               <div
                 role="button"
-                tabIndex={0}
-                onClick={() => onSelectChat(chat.chatId)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectChat(chat.chatId); }}
+                tabIndex={0} // Makes div element tab inter-actable
+                onClick={() => handleSelectChat(chat.chatId)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectChat(chat.chatId); }} // Allows Enter and Space to select chat-head.
                 className={clsx(
                   'w-full text-left p-4 rounded-lg transition-colors duration-200 ease-in-out shadow-md border border-gray-700 flex justify-between items-center cursor-pointer',
                   activeChatId === chat.chatId
@@ -127,10 +158,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               </div>
 
+              {/* Chat-head MENU for Delete or Rename */}
               {menuOpenFor === chat.chatId && (
                 <div
                   ref={menuRef}
-                  className={`absolute right-0 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10 ${menuPositionClass}`}
+                  className={`absolute right-0 top-0 mt-1 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10`}
                 >
                   <ul className="py-1">
                     <li>
@@ -165,68 +197,15 @@ const Sidebar: React.FC<SidebarProps> = ({
           ))}
         </div>
       </div>
-
-      {/* Custom Scrollbar Styles */}
-      <style>{`
-        .custom-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        @keyframes scaleIn {
-          from {
-            transform: scale(0.95);
-            opacity: 0;
-          }
-          to {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        .animate-scaleIn {
-          animation: scaleIn 0.2s ease-out forwards;
-        }
-      `}</style>
-
-      {/* Confirmation Modal */}
-      {showConfirmModal && chatIdToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 sm:p-6">
-          <div className="bg-gray-900 p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border border-gray-700
-                        transform transition-all duration-300 scale-95 opacity-0 animate-scaleIn">
-            <h2 className="text-2xl font-bold text-white mb-3">Delete Chat?</h2>
-            <p className="text-gray-400 text-base mb-8 leading-relaxed">
-              Are you sure you want to delete this chat? This action is irreversible.
-            </p>
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setChatIdToDelete(null);
-                }}
-                className="px-6 py-2 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-medium
-                          transition-all duration-200 ease-in-out
-                          focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-gray-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onDelete(chatIdToDelete);
-                  setShowConfirmModal(false);
-                  setChatIdToDelete(null);
-                }}
-                className="px-6 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold
-                          transition-all duration-200 ease-in-out
-                          focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-red-500"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* OverLay Delete Model for Chat-Head */}
+      <ConfirmChatDeleteModal
+        isOpen={showConfirmModal}
+        chatIdToDelete={chatIdToDelete}
+        onClose={() => {
+          setShowConfirmModal(false);
+          setChatIdToDelete(null);
+        }}
+      />
     </>
   );
 };

@@ -3,7 +3,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
 
-export default function AddButton() {
+interface AddButtonProps {
+    showAddMemoryModal: ()=> void;
+}
+
+
+export const AddButton: React.FC<AddButtonProps> = ({
+    showAddMemoryModal
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -85,6 +92,7 @@ export default function AddButton() {
                         )}
                         onClick={() => {
                             console.log("Add Memory clicked!");
+                            showAddMemoryModal();
                             setIsOpen(false);
                         }}
                     >

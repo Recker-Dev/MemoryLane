@@ -1,8 +1,8 @@
 // CUSTOM HOOK
 
 import { useEffect } from 'react';
-import { UseBoundStore, StoreApi } from "zustand";
-import { ChatStore } from "@/lib/stores/chatStore";
+import { useUserStateStore } from '@/lib/stores/useUserStateStore';
+import { useChatStore } from '@/lib/stores/useChatStore';
 
 
 /**
@@ -23,22 +23,36 @@ import { ChatStore } from "@/lib/stores/chatStore";
  * --------------------------------------------------------
  */
 
-export function useSyncUserSession(args: { 
-  userIdFromRoute: string | null; 
-  userId: string | null; 
-  setUserId: (id: string) => void;
-  setIsUserSynced: (value: boolean) => void;
-  reset: () => void;
+export function useSyncUserSession(args: {
+  userIdFromRoute: string | null;
+
 }) {
-  const { userIdFromRoute, userId, setUserId,setIsUserSynced,reset} = args;
+  const { userIdFromRoute } = args;
+
+  const setIsUserSynced = useUserStateStore((state) => state.setIsUserSynced);
+
+  const userId = useUserStateStore((state) => state.userId);
+  const setUserId = useUserStateStore((state) => state.setUserId);
+
+  const resetUserCreds = useUserStateStore((state) => state.reset);
+  const resetChatCreds = useChatStore((state) => state.reset);
 
 
   useEffect(() => {
-    if (userIdFromRoute && (userId !== userIdFromRoute)) {
-      reset();
+    if (userIdFromRoute && userId !== userIdFromRoute) {
+      resetUserCreds();
+      resetChatCreds();
       setUserId(userIdFromRoute);
+      setIsUserSynced(true); // If diff user, reset stuff and set sync as true.
+    } else if (userIdFromRoute && userId === userIdFromRoute) {
+      setIsUserSynced(true); // If not diff user, dont reset stuff and set sync true.
     }
-
-    setIsUserSynced(true); // User either gets sync post store reset or if same user, without reset.
-  }, [setIsUserSynced,userIdFromRoute, userId, setUserId, reset ]);
+  }, [
+    userIdFromRoute,
+    userId,
+    setUserId,
+    setIsUserSynced,
+    resetUserCreds,
+    resetChatCreds
+  ]);
 }

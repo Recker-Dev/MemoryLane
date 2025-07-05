@@ -1,31 +1,19 @@
 import { useCallback } from "react";
 import { v4 as uuidv4 } from 'uuid';
-import toast from "react-hot-toast";
-import { ChatHead } from "@/components/sidebar";
+import { ChatHead } from "@/components/widgets/Sidebar";
 import { createNewChatHeadAPI, deleteChatHeadAPI } from "@/lib/chatServices";
 import { useRouter } from "next/navigation";
 
 
-export function useChatCRUD(args: {
-    isUserSynced: boolean,
-    userId: string | null,
-    activeChatId: string | null,
-    setActiveChatId: React.Dispatch<React.SetStateAction<string | null>>,
-    addChatHead: (head: ChatHead) => void,
-    removeChatHead: (id: string) => void,
-    setInputText: React.Dispatch<React.SetStateAction<string>>,
-    setShowNewChatModal: React.Dispatch<React.SetStateAction<boolean>>,
+export function useChatCRUD() {
 
-}) {
-
-    const { isUserSynced, userId, activeChatId, setActiveChatId, addChatHead, removeChatHead, setInputText, setShowNewChatModal } = args;
     const router = useRouter();
 
     const createChatHead = useCallback(
-        async (newChatName: string) => {
+        async (isUserSynced: boolean, userId: string | null, newChatName: string): Promise<void | { success: false; error: string; } | { success: true; chatHead: ChatHead; }> => {
 
-            if (!isUserSynced) return;
-            if (!userId) return;
+            if (!isUserSynced || !userId)
+                return { success: false, error: "User not synced or missing ID." };
 
             const newChatId = uuidv4();
             const newChatHead: ChatHead = {
@@ -34,55 +22,44 @@ export function useChatCRUD(args: {
                 preview: 'No messages yet.',
             };
 
-            // 2. Optimistic UI update
-            addChatHead(newChatHead);
-            setInputText('');
-            setShowNewChatModal(false); // Closing Modal
-
-
-            // 3. Wait for DB sync before navigating
             const response = await createNewChatHeadAPI(userId, newChatHead);
 
             if (!response.success) {
-                removeChatHead(newChatHead.chatId);
-                toast.error(response.message || "Failed to sync chat head with server.");
-                return;
+                return { success: false, error: response.message };
             }
 
-            // 4. Route after chat creation is confirmed
-            setActiveChatId(newChatId);
             router.push(`/chat/${userId}/${newChatId}`);
 
-        }, [isUserSynced,userId, router, addChatHead, removeChatHead, setInputText, setShowNewChatModal, setActiveChatId]
+            return { success: true, chatHead: newChatHead };
+
+        }, [router]
     );
 
     const deleteChatHead = useCallback(
-        async (chatId: string) => {
+        async (isUserSynced: boolean, userId: string | null, chatId: string | null, activeChatId: string | null): Promise<{ success: true; chatId: string; } | { success: false; error: string; }> => {
 
-            if (!isUserSynced) return;
-            if (!userId) return;
+            if (!isUserSynced || !userId || !chatId)
+                return { success: false, error: "User not synced or missing userID or chatID missing." };
 
             const response = await deleteChatHeadAPI(userId, chatId);
 
             if (!response.success) {
-                toast.error(response.message || "Failed to delete chat-head");
-                return;
+                return { success: false, error: response.message };
+
             }
 
             if (response.success) {
-                removeChatHead(chatId);
-                toast.success(response.message);
                 if (chatId === activeChatId) {
-                    setActiveChatId(null);
                     router.push(`/chat/${userId}`); // Push Back to base homepage
                 }
             }
-        }, [isUserSynced,userId, router, setActiveChatId, removeChatHead]);
-    
-        return {
-            createChatHead,
-            deleteChatHead
-        };
+            return { success: true, chatId: chatId };
+        }, [router]);
+
+    return {
+        createChatHead,
+        deleteChatHead
+    };
 }
 
 
