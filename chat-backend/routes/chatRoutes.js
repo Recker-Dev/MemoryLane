@@ -148,6 +148,18 @@ export default async function chatRoutes(fastify, options) {
         const { userId, chatId } = req.params;
         const { message } = req.body;
 
+        const userText = message.text;
+        const selected_memories = message.selected_memories;
+
+        let contexts;
+
+        if (!selected_memories.length > 0)
+            contexts = "";
+        else {
+            contexts = selected_memories.map(({ context, tags }) => `context: ${context}, tags: ${tags}`).join('; ');
+        }
+
+
         if (!message || typeof message != 'object') {
             return res.code(400).send({ error: 'Invalid Message Format, expected an object' });
 
@@ -155,7 +167,7 @@ export default async function chatRoutes(fastify, options) {
 
         // Placeholder AI response
         return {
-            text: `This is AI response to |${message.text}| for chatID: |${chatId}| `,
+            text: `This is AI response to |${userText}| with context |${contexts}| for chatID: |${chatId}| `,
             sender: "ai",
         };
 

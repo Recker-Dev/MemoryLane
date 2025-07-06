@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 import { useHandleInputSubmission } from "@/features/chat/custom-hooks/useHandleInputSubmission";
 import toast from "react-hot-toast";
 
+import { useMemoryStore } from '@/lib/stores/useMemoryStore';
 
 export interface ChatInputProps {
   isProcessingInput: boolean;
@@ -20,6 +21,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   setAddMemoryModal
 }) => {
 
+  ////////// GLOBAL states //////////
+  const selectedMemories = useMemoryStore((state) => state.selectedMemories);
+
   ////////// COMPONENT States //////////
   const [inputText, setInputText] = useState('');
   const mainInputRef = useRef<HTMLInputElement>(null);
@@ -27,7 +31,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   /////////// CUSTOM HOOK /////////////
   // Handles business logic of user-chat-submission, ai-response and db updation.
-  const {handleSubmission} = useHandleInputSubmission();
+  const { handleSubmission } = useHandleInputSubmission();
 
   const onInputSubmit = async () => {
 
@@ -54,8 +58,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
           type="text"
           value={inputText}
           onChange={(event) => { setInputText(event.target.value); }}
-          onKeyDown={(event)=>{if(event.key === 'Enter') {onInputSubmit();}}}
-          placeholder="Chat with AI..."
+          onKeyDown={(event) => { if (event.key === 'Enter') { onInputSubmit(); } }}
+          placeholder={
+            selectedMemories.length > 0
+              ? `${selectedMemories.length} memor${selectedMemories.length > 1 ? "ies" : "y"} selected for context...`
+              : "Chat with AI..."
+          }
           className={clsx(
             "w-full px-5 pt-4 pb-2 text-white text-lg",
             "bg-transparent focus:outline-none placeholder-gray-400"

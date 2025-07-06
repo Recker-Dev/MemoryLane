@@ -42,7 +42,7 @@ export async function fetchMessages(userId: string, chatId: string): Promise<{ s
     };
 }
 
-export async function getAiResponse(userId: string, chatId: string, text: string): Promise<
+export async function getAiResponse(userId: string, chatId: string, text: string, selected_memories:Memory[]): Promise<
     { success: true, message: MessageBubbleProps } |
     { success: false, message: string }> {
 
@@ -51,7 +51,7 @@ export async function getAiResponse(userId: string, chatId: string, text: string
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: { text: text } }),
+        body: JSON.stringify({ message: { text: text, selected_memories:selected_memories } }),
     });
 
     if (!response.ok) {

@@ -16,6 +16,7 @@ import { pushToPendingMessages, getAiResponse } from "@/lib/chatServices";
 import { MessageBubbleProps } from "@/components/ui/MessageBubble";
 import { useUserStateStore } from "@/lib/stores/useUserStateStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
+import { useMemoryStore } from "@/lib/stores/useMemoryStore";
 
 // /* ----------------------------------------------------------------------
 //  * HELPER: handleFetchingRelevantMemories
@@ -92,6 +93,8 @@ export function useHandleInputSubmission() {
     const activeChatId = useUserStateStore((state) => state.activeChatId);
     const appendChatMessages = useChatStore((state) => state.appendChatMessages);
 
+    const selectedMemories = useMemoryStore((state) => state.selectedMemories);
+
     /**
      * Submits a user message and fetches AI response.
      */
@@ -138,8 +141,9 @@ export function useHandleInputSubmission() {
         // Immediately update chat with user's message
         appendChatMessages(activeChatId, [userMessage]);
 
+
         // Call AI
-        const aiResponse = await getAiResponse(userId, activeChatId, trimmedOutput);
+        const aiResponse = await getAiResponse(userId, activeChatId, trimmedOutput, selectedMemories);
         if (aiResponse.success) {
             const aiMessage: MessageBubbleProps = {
                 ...aiResponse.message,

@@ -7,6 +7,12 @@ export type MemoryStore = {
     setChatMemories: (memories: Memory[]) => void,
     removeMemoryById: (id: string) => void,
     reset: () => void
+
+
+    selectedMemories: Memory[],
+    appendToSelectedMemories: (memory: Memory) => void,
+    removeFromSelectedMemories: (memory: Memory) => void,
+    resetSelectedMemories: () => void
 }
 
 export const useMemoryStore = create<MemoryStore>((set) => ({
@@ -23,5 +29,23 @@ export const useMemoryStore = create<MemoryStore>((set) => ({
 
     reset: () => set({
         chatMemories: [],
+    }),
+
+
+
+    selectedMemories: [],
+
+    appendToSelectedMemories: (memory) => set((state) => ({ // Either wrap {} in ()
+        selectedMemories: [...state.selectedMemories, memory] 
+    })),
+
+    removeFromSelectedMemories: (memory) => set((state) => { return { // Or use {return {}}
+        selectedMemories: state.selectedMemories.filter((mem) => mem.mem_id !== memory.mem_id) 
+    }}), 
+
+    resetSelectedMemories: () => set({
+        selectedMemories: []
     })
+
+
 }));

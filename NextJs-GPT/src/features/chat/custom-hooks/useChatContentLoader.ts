@@ -38,11 +38,16 @@ export function useChatContentLoader(args: {
     const setAllChatMessages = useChatStore((state) => state.setAllChatMessages);
     
     const setMemories = useMemoryStore((state) => state.setChatMemories);
+    const resetSelectedMemories = useMemoryStore((state) => state.resetSelectedMemories);
+
 
 
     useEffect(() => {
         if (!isUserSynced) return;
         if (!activeChatId || !userId) return;
+
+        // Wipe out any previously selected memory context from other chatId.
+        resetSelectedMemories();
 
         // --- messages fetch ---
         const fetchChatMessages = async () => {

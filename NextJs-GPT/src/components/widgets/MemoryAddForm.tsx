@@ -134,6 +134,7 @@ export const MemoryAddForm: React.FC<MemoryAddFormProps> = ({
                         value={memoryContext}
                         onChange={(e) => setMemoryContext(e.target.value)}
                         rows={4} // Initial number of rows
+                        autoFocus // Automatically focus the textarea
                     />
                 </div>
 
