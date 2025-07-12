@@ -10,10 +10,12 @@ import { useParams, notFound } from 'next/navigation';
 
 import ChatWindow from '@/components/ui/ChatWindow';
 import ChatMemoriesDropdown, { Memory } from '@/components/widgets/ChatMemoriesDropdown';
+import ChatFilesDropdown from '@/components/widgets/ChatFilesDropdown';
 import ChatInput from '@/components/widgets/ChatInput';
 import Sidebar from '@/components/widgets/Sidebar';
 import { CreateNewChatModal } from '@/components/widgets/CreateNewChatModal';
 import { MemoryAddForm } from '@/components/widgets/MemoryAddForm';
+import { FileUploadForm } from '@/components/widgets/FileUploadForm';
 
 import { useChatStore } from '@/lib/stores/useChatStore';
 import { useUserStateStore } from '@/lib/stores/useUserStateStore';
@@ -49,6 +51,8 @@ export default function ChatPage() {
   ///////// COMPONENT state //////////
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showAddMemoryModal, setAddMemoryModal] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false); // Set to true to make it visible by default
+  
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isProcessingInput, setIsProcessingInput] = useState(false);
 
@@ -61,8 +65,6 @@ export default function ChatPage() {
   const userIdFromRoute = path[0];
   const chatIdFromRoute = path[1];
 
-
-  const [memories, setMemories] = useState<Memory[]>([]);
 
 
   // Syncing User
@@ -124,7 +126,16 @@ export default function ChatPage() {
 
           {activeChatId && !isLoadingMessages ? (
             <>
-              <ChatMemoriesDropdown />
+              <div className="flex flex-row gap-4 p-4">
+                {/* Wrap ChatMemoriesDropdown in a relative div */}
+                <div className="relative">
+                  <ChatMemoriesDropdown />
+                </div>
+                {/* Wrap ChatFilesDropdown in a relative div */}
+                <div className="relative">
+                  <ChatFilesDropdown />
+                </div>
+              </div>
               <div className="flex flex-col w-full max-w-5xl mx-auto flex-grow min-h-0 z-10">
                 <ChatWindow
                   messages={currentMessages}
@@ -134,6 +145,7 @@ export default function ChatPage() {
                   isProcessingInput={isProcessingInput}
                   setIsProcessingInput={setIsProcessingInput}
                   setAddMemoryModal={setAddMemoryModal}
+                  setShowUploadForm={setShowUploadForm}
                 />
               </div>
             </>
@@ -159,6 +171,10 @@ export default function ChatPage() {
         <MemoryAddForm
           isOpen={showAddMemoryModal}
           onClose={() => setAddMemoryModal(false)}
+        />
+        <FileUploadForm
+          isOpen={showUploadForm}
+          onClose={() => setShowUploadForm(false)}
         />
       </div>
     </div>

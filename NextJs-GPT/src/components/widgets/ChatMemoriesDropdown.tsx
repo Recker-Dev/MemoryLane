@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
+import { NotebookPen } from 'lucide-react';
 
 import { useDeleteChatMemory } from '@/features/memory/custom-hooks/useDeleteChatMemory';
 
@@ -13,6 +14,9 @@ export type Memory = {
   tags: string[];
 }
 
+interface MemoryUI extends Memory {
+  is_persistent: boolean;
+}
 
 type ChatMemoriesDropdownProps = {}
 
@@ -32,6 +36,9 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
   const [showMemoriesDropdown, setShowMemoriesDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
+  const [persistentMap, setPersistentMap] = useState<Record<string, boolean>>({});
+
+
 
 
   useEffect(() => {
@@ -53,9 +60,6 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
     };
   }, [showMemoriesDropdown]);
 
-  const toggleMemoriesDropdown = () => {
-    setShowMemoriesDropdown(prev => !prev);
-  };
 
   const handleMemorySelection = (memory: Memory) => {
     if (selectedMemories.some((mem) => mem.mem_id === memory.mem_id)) {
@@ -65,6 +69,14 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
       appendToSelectedMemories(memory);
     }
   };
+ 
+  const handleTogglePersistent = (memory:Memory) => {
+  setPersistentMap(prev => ({
+    ...prev,
+    [memory.mem_id]: !prev[memory.mem_id],
+  }));
+  appendToSelectedMemories(memory);
+};
 
 
   // console.log(selectedMemories);
@@ -73,44 +85,31 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
   return (
     <>
       {/* Memories Toggle Button (same as yours) */}
-        <button
-          ref={toggleButtonRef}
-          onClick={toggleMemoriesDropdown}
-          className={clsx(
-            "absolute top-4 left-4 z-30 p-2 rounded-full hover:cursor-pointer",
-            "bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors duration-200",
-            "focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75"
-          )}
-          aria-label="Toggle chat memories"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
+      <button
+        ref={toggleButtonRef}
+        onClick={() => { setShowMemoriesDropdown(prev => !prev); }}
+        className={clsx(
+          "relative p-2 rounded-full hover:cursor-pointer",
+          "bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors duration-200",
+          "focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75"
+        )}
+        aria-label="Toggle chat memories"
+      >
+        <NotebookPen />
+        {/* A mini-badge showing count of memories selected currently */}
+        {selectedMemories.length > 0 && (
+          <span
+            className={clsx(
+              "absolute -top-1 -right-1",
+              "bg-purple-600 text-white text-xs font-semibold",
+              "px-1.5 py-0.5 rounded-full",
+              "border border-gray-900"
+            )}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M5 19V7.5a2.5 2.5 0 012.5-2.5h9A2.5 2.5 0 0119 7.5V19m-9 0v-4a2 2 0 00-2-2H8a2 2 0 00-2 2v4m3-11H8m6 0h-3"
-            />
-          </svg>
-          {/* A mini-badge showing count of memories selected currently */}
-          {selectedMemories.length > 0 && ( 
-            <span
-              className={clsx(
-                "absolute -top-1 -right-1",
-                "bg-purple-600 text-white text-xs font-semibold",
-                "px-1.5 py-0.5 rounded-full",
-                "border border-gray-900"
-              )}
-            >
-              {selectedMemories.length}
-            </span>
-          )}
-        </button>
+            {selectedMemories.length}
+          </span>
+        )}
+      </button>
 
       {/* Memories Dropdown */}
       {
@@ -118,7 +117,7 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
           <div
             ref={dropdownRef}
             className={clsx(
-              "absolute top-16 left-4 z-40 w-80 max-h-96 overflow-y-auto",
+              "absolute top-full left-0 mt-2 z-40 w-80 max-h-96 overflow-y-auto",
               "bg-gray-900 border border-gray-700 rounded-lg shadow-xl",
               "p-4 space-y-3 scrollbar-custom"
             )}
@@ -151,7 +150,7 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
                     aria-label={`Memory ${memory.mem_id}: ${memory.context}`}
                   >
                     {/* Checkmark icon for selected memories */}
-                    {isSelected && (
+                    {/* {isSelected && (
                       <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-0.5">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -168,12 +167,25 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
                           />
                         </svg>
                       </div>
-                    )}
+                    )} */}
 
 
                     <p className="text-gray-400 text-xs">
                       ID: {memory.mem_id}
                     </p>
+                    {/* <label className="flex items-center cursor-pointer">
+                      <span className="mr-2 text-gray-400 text-sm">Persistent</span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={isPersistent}
+                          onChange={() => setIsPersistent((prev) => !prev)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:bg-purple-600 transition-all duration-300"></div>
+                        <div className="absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all duration-300 peer-checked:translate-x-5"></div>
+                      </div>
+                    </label> */}
 
 
                     <p className="text-white text-sm font-medium mb-1">
@@ -182,33 +194,52 @@ const ChatMemoriesDropdown: React.FC<ChatMemoriesDropdownProps> = () => {
                         {memory.context}
                       </span>
                     </p>
-                    <div className="flex justify-between items-start mb-1">
-                      {memory.tags && memory.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          <span className="text-gray-400 text-xs">Tags:</span>
-                          {memory.tags.map((tag, tagIndex) => (
-                            <span
-                              key={`${memory.mem_id}-${tag}-${tagIndex}`}
-                              className="bg-purple-800 text-purple-200 px-2 py-0.5 rounded-full text-xs font-medium"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFromSelectedMemories(memory); // If was selected good and fine, if not, fine either way.
-                          handleDeleteMemoryClick(memory.mem_id);
-                        }}
-                        className="text-red-400 hover:text-red-300 text-lg cursor-pointer transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-red-500 rounded-full"
-                        aria-label={`Delete memory ${memory.mem_id}`}
-                      >
-                        ❌
-                      </button>
+                    {/* tags block */}
+                    {memory.tags && memory.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        <span className="text-gray-400 text-xs">Tags:</span>
+                        {memory.tags.map((tag, tagIndex) => (
+                          <span
+                            key={`${memory.mem_id}-${tag}-${tagIndex}`}
+                            className="bg-purple-800 text-purple-200 px-2 py-0.5 rounded-full text-xs font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex justify-between mt-3">
+                      {/* action block */}
+                      {/* <div className="flex items-center gap-3"> */}
+                        <label className="flex items-center cursor-pointer">
+                          <span className="text-gray-400 text-xs mr-1">Persistent</span>
+                          <div className="relative">
+                            <input
+                              type="checkbox"
+                              checked={!!persistentMap[memory.mem_id]}
+                              onChange={() => handleTogglePersistent(memory)}
+                              // onChange={() => handleTogglePersistent(memory.mem_id)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:bg-purple-600 transition-all duration-300"></div>
+                            <div className="absolute top-0.5 left-0.5 bg-white w-4 h-4 rounded-full transition-all duration-300 peer-checked:translate-x-4"></div>
+                          </div>
+                        </label>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromSelectedMemories(memory);
+                            handleDeleteMemoryClick(memory.mem_id);
+                          }}
+                          className="text-red-400 hover:text-red-300 text-lg cursor-pointer transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-red-500 rounded-full"
+                          aria-label={`Delete memory ${memory.mem_id}`}
+                        >
+                          ❌
+                        </button>
+                      </div>
                     </div>
-                  </div>
+
+                  // </div>
                 );
               })
             )}

@@ -1,4 +1,4 @@
-export function setupNodeProcessHandlers({ flushPendingMessages, fastifyInstance }) {
+export function setupNodeProcessHandlers({ fastifyInstance }) {
     async function shutdown(reasonOrError) {
         console.log(`⚠️ Process shutting down... Reason:`, reasonOrError);
 

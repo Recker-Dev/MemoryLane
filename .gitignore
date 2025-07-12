@@ -50,3 +50,16 @@ NextJs-GPT/node_modules/
 NextJs-GPT/.env*
 NextJs-GPT/dist/
 NextJs-GPT/.next/
+
+
+
+## vector-micro-service specific
+backend/vector-micro-service/.venv
+backend/vector-micro-service/.env
+backend/vector-micro-service/vectorDB
+**/__pycache__/
+
+
+## micro-service specific
+uploads
+backend/micro-service/.env

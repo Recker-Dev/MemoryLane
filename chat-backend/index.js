@@ -53,7 +53,6 @@ fastify.addHook('onClose', async (instance, done) => {
 
 // SETUP Node Shutdown logic 
 setupNodeProcessHandlers({
-  flushPendingMessages: flushPendingMessagesToChats,
   fastifyInstance: fastify
 });
 

@@ -35,13 +35,18 @@ export const useMemoryStore = create<MemoryStore>((set) => ({
 
     selectedMemories: [],
 
-    appendToSelectedMemories: (memory) => set((state) => ({ // Either wrap {} in ()
-        selectedMemories: [...state.selectedMemories, memory] 
-    })),
+    appendToSelectedMemories: (memory) => set((state) => {
+        if (state.selectedMemories.some((mem) => mem.mem_id === memory.mem_id)) {
+            return state;
+        }
+        return { selectedMemories: [...state.selectedMemories, memory] }
+    }),
 
-    removeFromSelectedMemories: (memory) => set((state) => { return { // Or use {return {}}
-        selectedMemories: state.selectedMemories.filter((mem) => mem.mem_id !== memory.mem_id) 
-    }}), 
+    removeFromSelectedMemories: (memory) => set((state) => {
+        return { // Or use {return {}}
+            selectedMemories: state.selectedMemories.filter((mem) => mem.mem_id !== memory.mem_id)
+        }
+    }),
 
     resetSelectedMemories: () => set({
         selectedMemories: []

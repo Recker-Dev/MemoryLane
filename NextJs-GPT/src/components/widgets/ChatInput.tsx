@@ -12,13 +12,15 @@ import { useMemoryStore } from '@/lib/stores/useMemoryStore';
 export interface ChatInputProps {
   isProcessingInput: boolean;
   setIsProcessingInput: React.Dispatch<React.SetStateAction<boolean>>;
-  setAddMemoryModal: React.Dispatch<React.SetStateAction<boolean>>
+  setAddMemoryModal: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowUploadForm: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
   isProcessingInput,
   setIsProcessingInput,
-  setAddMemoryModal
+  setAddMemoryModal,
+  setShowUploadForm
 }) => {
 
   ////////// GLOBAL states //////////
@@ -72,7 +74,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* BOTTOM ROW → + and send buttons */}
         <div className="flex items-center justify-between px-4 pb-3 pt-1">
-          <AddButton showAddMemoryModal={() => { setAddMemoryModal(true); }} />
+          <AddButton
+            showAddMemoryModal={() => setAddMemoryModal(true)}
+            showAddFilesModal={() => setShowUploadForm(true)} />
           <SubmitButton
             isProcessingInput={isProcessingInput}
             onInputSubmit={onInputSubmit}

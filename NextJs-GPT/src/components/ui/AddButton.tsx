@@ -1,15 +1,16 @@
-"use client";
-
 import React, { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
+import { NotebookPen, FileStack, Plus } from 'lucide-react';
 
 interface AddButtonProps {
-    showAddMemoryModal: ()=> void;
+    showAddMemoryModal: () => void;
+    showAddFilesModal: () => void;
 }
 
 
 export const AddButton: React.FC<AddButtonProps> = ({
-    showAddMemoryModal
+    showAddMemoryModal,
+    showAddFilesModal
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -48,17 +49,7 @@ export const AddButton: React.FC<AddButtonProps> = ({
                 )}
                 aria-label="Add Button"
             >
-                {/* Plus SVG */}
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus />
             </button>
 
             {/* Dropdown menu */}
@@ -66,38 +57,67 @@ export const AddButton: React.FC<AddButtonProps> = ({
                 <div
                     ref={dropdownRef}
                     className={clsx(
-                        "flex min-w-0 items-center gap-2 px-2",
-                        "absolute left-0 bottom-full mb-2 w-48 rounded-lg shadow-lg z-50",
-                        "bg-gray-800 border border-gray-700 -translate-x-6 -translate-y-4 hover:bg-gray-700 hover:shadow-xl"
-                    )}
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 19V7.5a2.5 2.5 0 012.5-2.5h9A2.5 2.5 0 0119 7.5V19m-9 0v-4a2 2 0 00-2-2H8a2 2 0 00-2 2v4m3-11H8m6 0h-3"
-                        />
-                    </svg>
-                    <button
-                        className={clsx(
-                            "text-left py-2 text-white",
-                            "transition-colors duration-150"
+                        "absolute left-0 bottom-full mb-2 z-50",
+                        "flex flex-col gap-2 w-48 rounded-lg shadow-lg",
+                        "bg-gray-800 border border-gray-700"
+                    )} >
+                    <div
+                        className={clsx("flex items-center gap-2 px-2  hover:bg-gray-700 hover:shadow-xl my-1 mx-1 rounded-lg transition-all",
                         )}
-                        onClick={() => {
-                            console.log("Add Memory clicked!");
-                            showAddMemoryModal();
-                            setIsOpen(false);
-                        }}
                     >
-                        Add Chat Memory
-                    </button>
+                        {/* <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-6 w-6"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5 19V7.5a2.5 2.5 0 012.5-2.5h9A2.5 2.5 0 0119 7.5V19m-9 0v-4a2 2 0 00-2-2H8a2 2 0 00-2 2v4m3-11H8m6 0h-3"
+                            />
+                        </svg> */}
+                        <NotebookPen className="text-purple-400" />
+                        <button
+                            className={clsx(
+                                "flex-1 w-full h-full", 
+                                "text-left py-2 text-white",
+                                "transition-colors duration-150",
+                                "hover:bg-gradient-to-r hover:from-purple-400 hover:to-pink-600 hover:bg-clip-text hover:text-transparent"
+                            )}
+                            onClick={() => {
+                                console.log("Add Memory clicked!");
+                                showAddMemoryModal();
+                                setIsOpen(false);
+                            }}
+                        >
+                            Add Memory
+                        </button>
+                    </div>
+                    <div
+                        className={clsx("flex items-center gap-2 px-2  hover:bg-gray-700 hover:shadow-xl my-1 mx-1 rounded-lg transition-all",
+                        )}
+                    >
+                        <FileStack className="text-blue-400" />
+                        <button
+                            className={clsx(
+                                "flex-1 w-full h-full", 
+                                "text-left py-2 text-white",
+                                "transition-colors duration-150",
+                                "hover:bg-gradient-to-r hover:from-blue-400 hover:to-cyan-600 hover:bg-clip-text hover:text-transparent"
+
+                            )}
+                            onClick={() => {
+                                console.log("Add Memory clicked!");
+                                showAddFilesModal();
+                                setIsOpen(false);
+                            }}
+                        >
+                            Add Files
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
