@@ -68,7 +68,7 @@ COLLECTION_NAME=vectors_collection
 | POST   | `/vectorize` | Upload and vectorize PDF  |
 | POST   | `/query`     | Query semantic search     |
 | DELETE | `/delete`    | Delete vectors for a file |
-| GET    | `/count`     | Count chunks for a file   |
+| POST   | `/count`     | Count chunks for a file   |
 | GET    | `/health`    | Health check              |
 
 
