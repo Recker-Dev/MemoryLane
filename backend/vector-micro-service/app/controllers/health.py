@@ -1,7 +1,10 @@
-from fastapi import APIRouter
+################################# SCRAPPED #######################################
+############################# SHIFTED TO gRPC ####################################
 
-router = APIRouter()
+# from fastapi import APIRouter
 
-@router.get("/")
-def health_check():
-    return {"status": "OK"}
+# router = APIRouter()
+
+# @router.get("/")
+# def health_check():
+#     return {"status": "OK"}

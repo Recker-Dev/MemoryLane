@@ -63,3 +63,9 @@ backend/vector-micro-service/vectorDB
 ## micro-service specific
 uploads
 backend/micro-service/.env
+
+## vectorDB
+vectorDB
+
+## uploads
+uploads

@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package vectorizer;
+
+option go_package = "vectorizer/proto;vectorizerpb";
+
+service VectorizerService {
+  // Streams PDF bytes, returns vectorization result
+  rpc UploadAndVectorize(stream PDFChunk) returns (VectorizeResponse);
+
+  // Query the vector store
+  rpc QueryVectors(QueryRequest) returns (QueryResponse);
+
+  // Count how many vectors exist for a file
+  rpc CountVectors(CountRequest) returns (CountResponse);
+
+  // Delete vectors
+  rpc DeleteVectors(DeleteRequest) returns (DeleteResponse);
+}
+
+message PDFChunk {
+  string user_id = 1;
+  string chat_id = 2;
+  string file_id = 3;
+  string filename = 4;
+  bytes data = 5;
+  bool is_first_chunk = 6;
+  bool is_last_chunk = 7;
+}
+
+message VectorizeResponse {
+  bool success = 1;
+  string message = 2;
+  int32 chunk_count = 3;
+}
+
+message QueryRequest {
+  string user_id = 1;
+  string chat_id = 2;
+  string file_id = 3;
+  int32 top_k = 4;
+  repeated string query_texts = 5;
+}
+
+message QueryResponse {
+  bool success = 1;
+  string message = 2;
+  repeated QueryResult results = 3;
+}
+
+message QueryResult {
+  string id = 1;
+  string document = 2;
+  string source = 3;
+  int32 page = 4;
+  double distance = 5;
+}
+
+message CountRequest {
+  string user_id = 1;
+  string chat_id = 2;
+  string file_id = 3;
+}
+
+message CountResponse {
+  bool success = 1;
+  string message = 2;
+  int32 count = 3;
+}
+
+message DeleteRequest {
+  string user_id = 1;
+  string chat_id = 2;
+  string file_id = 3;
+}
+
+message DeleteResponse {
+  bool success = 1;
+  string message = 2;
+}
