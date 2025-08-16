@@ -128,7 +128,7 @@ def insert_chunks_to_vectorstore(
 
 
 def query_chunks(
-    user_id: str, chat_id: str, file_id: str, k: int, query: List[str]
+    user_id: str, chat_id: str, file_ids: list[str], k: int, query: List[str]
 ) -> Tuple[bool, Union[List[Dict[str, Any]], Dict[str, Any]]]:
     """
     Queries the vector store for relevant chunks based on a given query, scoped by user, chat, and file ID.
@@ -154,6 +154,9 @@ def query_chunks(
     try:
         # The final number of unique results to return after processing
         final_top_k = k
+        ## Redundant step to bypass a stupid bug.
+        file_ids = list(file_ids)
+        query = list(query)
 
         results = collection.query(
             query_texts=query,
@@ -162,7 +165,7 @@ def query_chunks(
                 "$and": [
                     {"user_Id": {"$eq": user_id}},
                     {"chat_Id": {"$eq": chat_id}},
-                    {"file_id": {"$eq": file_id}},
+                    {"file_id": {"$in": file_ids}},
                 ]
             },
         )

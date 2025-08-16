@@ -7,16 +7,15 @@ import (
 )
 
 type Message struct {
-	ID        string    `bson:"id" json:"id"`
-	Sender    string    `bson:"sender" json:"sender"`
-	Text      string    `bson:"text" json:"text"`
-	Timestamp time.Time `bson:"timestamp,omitempty" json:"timestamp,omitempty"`
+	MsgID     string `json:"msgId" bson:"msgId"`
+	Role      string `json:"role" bson:"role"`
+	Content   string `json:"content" bson:"content"`
+	Timestamp string `json:"timestamp" bson:"timestamp"`
 }
 
 type Memory struct {
-	MemID   string   `bson:"mem_id" json:"mem_id"`
-	Context string   `bson:"context" json:"context"`
-	Tags    []string `bson:"tags" json:"tags"`
+	Memid   string `bson:"memid" json:"memind"`
+	Context string `bson:"context" json:"context"`
 }
 
 type Chat struct {

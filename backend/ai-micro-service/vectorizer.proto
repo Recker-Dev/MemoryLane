@@ -37,7 +37,7 @@ message VectorizeResponse {
 message QueryRequest {
   string user_id = 1;
   string chat_id = 2;
-  string file_id = 3;
+  repeated string file_id = 3;
   int32 top_k = 4;
   repeated string query_texts = 5;
 }
@@ -54,6 +54,7 @@ message QueryResult {
   string source = 3;
   int32 page = 4;
   double distance = 5;
+  string file_id = 6; 
 }
 
 message CountRequest {

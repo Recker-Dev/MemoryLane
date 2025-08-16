@@ -3,21 +3,19 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
-	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/config"
+	config "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/config"
 	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/models"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 )
-
-func getUserCollection() *mongo.Collection {
-	return config.DB.Collection("userAuth")
-}
 
 func RegisterUser(email, password string) error {
 
-	userCollection := getUserCollection()
+	userCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -39,7 +37,9 @@ func RegisterUser(email, password string) error {
 
 func ValidateUser(email, password string) (*models.User, error) {
 
-	userCollection := getUserCollection()
+	userCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

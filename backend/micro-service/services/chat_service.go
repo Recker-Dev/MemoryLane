@@ -3,21 +3,22 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
-	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/config"
+	config "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/config"
 	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/models"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func getChatCollection() *mongo.Collection {
-	return config.DB.Collection("chats")
-}
-
-func FindChatsByUserId(userId string) ([]models.Chat, error) {
-	chatCollection := getChatCollection()
+func Debug(userId string) ([]models.Chat, error) {
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -66,7 +67,9 @@ func FindChatsByUserId(userId string) ([]models.Chat, error) {
 }
 
 func CreateChat(userId, chatId, name string) error {
-	chatCollection := getChatCollection()
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -89,8 +92,36 @@ func CreateChat(userId, chatId, name string) error {
 	return err
 }
 
+func DeleteChat(userId, chatId string) error {
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var existing models.Chat
+	// Check if chat exists
+	err := chatCollection.FindOne(ctx, bson.M{"userId": userId, "chatId": chatId}).Decode(&existing)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return fmt.Errorf("chat with userId=%s and chatId=%s not found", userId, chatId)
+		}
+		return fmt.Errorf("failed to check chat existence: %w", err)
+	}
+
+	// Delete the chat
+	_, err = chatCollection.DeleteOne(ctx, bson.M{"userId": userId, "chatId": chatId})
+	if err != nil {
+		return fmt.Errorf("failed to delete chat: %w", err)
+	}
+	return nil
+
+}
+
 func GetChatHeads(userId string) ([]models.ChatHeads, error) {
-	chatCollection := getChatCollection()
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -129,7 +160,7 @@ func GetChatHeads(userId string) ([]models.ChatHeads, error) {
 		preview := "No messages yet"
 
 		if len(chat.Messages) > 0 {
-			preview = chat.Messages[0].Text
+			preview = chat.Messages[0].Content
 		}
 
 		head := models.ChatHeads{
@@ -150,7 +181,9 @@ func GetChatHeads(userId string) ([]models.ChatHeads, error) {
 }
 
 func GetChatMessages(userId, chatId string) ([]models.Message, error) {
-	chatCollection := getChatCollection()
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -179,4 +212,107 @@ func GetChatMessages(userId, chatId string) ([]models.Message, error) {
 	}
 
 	return chat.Messages, nil
+}
+
+func AddMemory(userId, chatId, memoryContext string) error {
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	newMemory := bson.M{
+		"memid":   primitive.NewObjectID().Hex(),
+		"context": memoryContext,
+	}
+
+	filter := bson.M{
+		"userId": userId,
+		"chatId": chatId,
+	}
+
+	update := bson.M{
+		"$addToSet": bson.M{
+			"memory": newMemory,
+		},
+	}
+
+	result, err := chatCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to add memory: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("chat not found for userId=%s chatId=%s", userId, chatId)
+	}
+
+	return nil
+}
+
+func GetChatMemories(userId, chatId string) ([]models.Memory, error) {
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Projection: only pull the memories field
+	projection := bson.M{
+		"memory": 1,
+		"_id":    0,
+	}
+
+	opts := options.FindOne().SetProjection(projection)
+
+	// Fetch the relevant chat for userId and chatId
+	var chat models.Chat
+	err := chatCollection.FindOne(ctx, bson.M{"userId": userId, "chatId": chatId}, opts).Decode(&chat)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("user or chat not found")
+		}
+		return nil, err
+	}
+
+	if len(chat.Memory) == 0 {
+		return []models.Memory{}, nil
+	}
+
+	return chat.Memory, nil
+
+}
+
+func DeleteMemory(userId, chatId, memId string) error {
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$pull": bson.M{
+			"memory": bson.M{"memid": memId},
+		},
+	}
+
+	result, err := chatCollection.UpdateOne(
+		ctx,
+		bson.M{"userId": userId, "chatId": chatId},
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("chat not found for given userId and chatId")
+	}
+	if result.ModifiedCount == 0 {
+		return errors.New("no memory with given memId found")
+	}
+
+	return nil
 }

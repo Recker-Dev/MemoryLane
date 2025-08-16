@@ -7,11 +7,12 @@
 package vectorizerpb
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -177,7 +178,7 @@ type QueryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	ChatId        string                 `protobuf:"bytes,2,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
-	FileId        string                 `protobuf:"bytes,3,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	FileId        []string               `protobuf:"bytes,3,rep,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
 	TopK          int32                  `protobuf:"varint,4,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
 	QueryTexts    []string               `protobuf:"bytes,5,rep,name=query_texts,json=queryTexts,proto3" json:"query_texts,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -228,11 +229,11 @@ func (x *QueryRequest) GetChatId() string {
 	return ""
 }
 
-func (x *QueryRequest) GetFileId() string {
+func (x *QueryRequest) GetFileId() []string {
 	if x != nil {
 		return x.FileId
 	}
-	return ""
+	return nil
 }
 
 func (x *QueryRequest) GetTopK() int32 {
@@ -316,6 +317,7 @@ type QueryResult struct {
 	Source        string                 `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
 	Page          int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty"`
 	Distance      float64                `protobuf:"fixed64,5,opt,name=distance,proto3" json:"distance,omitempty"`
+	FileId        string                 `protobuf:"bytes,6,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -383,6 +385,13 @@ func (x *QueryResult) GetDistance() float64 {
 		return x.Distance
 	}
 	return 0
+}
+
+func (x *QueryResult) GetFileId() string {
+	if x != nil {
+		return x.FileId
+	}
+	return ""
 }
 
 type CountRequest struct {
@@ -639,20 +648,21 @@ const file_vectorizer_proto_rawDesc = "" +
 	"\fQueryRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
 	"\achat_id\x18\x02 \x01(\tR\x06chatId\x12\x17\n" +
-	"\afile_id\x18\x03 \x01(\tR\x06fileId\x12\x13\n" +
+	"\afile_id\x18\x03 \x03(\tR\x06fileId\x12\x13\n" +
 	"\x05top_k\x18\x04 \x01(\x05R\x04topK\x12\x1f\n" +
 	"\vquery_texts\x18\x05 \x03(\tR\n" +
 	"queryTexts\"v\n" +
 	"\rQueryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x121\n" +
-	"\aresults\x18\x03 \x03(\v2\x17.vectorizer.QueryResultR\aresults\"\x81\x01\n" +
+	"\aresults\x18\x03 \x03(\v2\x17.vectorizer.QueryResultR\aresults\"\x9a\x01\n" +
 	"\vQueryResult\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bdocument\x18\x02 \x01(\tR\bdocument\x12\x16\n" +
 	"\x06source\x18\x03 \x01(\tR\x06source\x12\x12\n" +
 	"\x04page\x18\x04 \x01(\x05R\x04page\x12\x1a\n" +
-	"\bdistance\x18\x05 \x01(\x01R\bdistance\"Y\n" +
+	"\bdistance\x18\x05 \x01(\x01R\bdistance\x12\x17\n" +
+	"\afile_id\x18\x06 \x01(\tR\x06fileId\"Y\n" +
 	"\fCountRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
 	"\achat_id\x18\x02 \x01(\tR\x06chatId\x12\x17\n" +

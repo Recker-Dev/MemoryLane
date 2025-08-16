@@ -1,4 +1,4 @@
-package models
+package apimodels
 
 import (
 	"time"
@@ -15,4 +15,16 @@ type Upload struct {
 	Path              string             `bson:"path" json:"path"`
 	CreatedAt         time.Time          `bson:"createdAt" json:"createdAt"`
 	IsVectorDBCreated bool               `bson:"isVectorDBcreated" json:"isVectorDBcreated"`
+}
+
+type Message struct {
+	MsgID     string `json:"msgId" bson:"msgId"`
+	Role      string `json:"role" bson:"role"`
+	Content   string `json:"content" bson:"content"`
+	Timestamp string `json:"timestamp" bson:"timestamp"`
+}
+
+type Memory struct {
+	Memid   string `bson:"memid" json:"memind"`
+	Context string `bson:"context" json:"context"`
 }

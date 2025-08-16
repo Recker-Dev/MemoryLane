@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket Chat Test</title>
+  <style>
+    body {
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      font-family: monospace;
+    }
+
+    textarea {
+      background-color: #2d2d2d;
+      color: #d4d4d4;
+      border: 1px solid #555;
+      padding: 10px;
+    }
+
+    input {
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      font-family: monospace;
+      border: 1px solid #b1afaf;
+    }
+
+    button {
+      background-color: #333;
+      color: #d4d4d4;
+      border: 1px solid #555;
+      padding: 8px 12px;
+      margin: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #444;
+    }
+
+    pre#log,
+    pre#liveOutput {
+      background-color: #2b2b2b;
+      border: 1px solid #444;
+      padding: 10px;
+      margin-top: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .output-container {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background-color: #f5f5f5;
+      overflow-x: auto;
+      max-width: 600px;
+      /* Adjust the max-width as needed */
+      max-height: 300px;
+      /* Adjust the max-height as needed */
+    }
+
+    .output-text {
+      margin: 0;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>WebSocket Chat Tester</h1>
+  <textarea id="textInput" rows="10" cols="50"></textarea><br>
+  <h3>Message Id</h3>
+  <input type="text" id="messageId"><br><br>
+  <button onclick="sendFullStream()">Send Full Stream</button>
+
+  <h3>Live Server Response</h3>
+  <pre id="liveOutput" class="output-text"></pre>
+
+  <h3>Log</h3>
+  <pre id="log"></pre>
+
+  <script>
+    const userId = "123";
+    const chatId = Math.random().toString(36).substring(2, 15);;
+    const ws = new WebSocket(`ws://localhost:8080/ws?userId=${userId}&chatId=${chatId}`);
+    ws.binaryType = "arraybuffer";
+
+    // const currentStream = {
+    //   id: null,
+    //   buffer: []
+    // };
+    let currentStream = new Uint8Array(0);
+
+
+    ws.onopen = () => log("✅ WebSocket connected");
+
+    ws.onmessage = async (event) => {
+        const chunk = new Uint8Array(event.data);
+        const newBuffer = new Uint8Array(currentStream.length + chunk.length);
+        newBuffer.set(currentStream, 0);
+        newBuffer.set(chunk, currentStream.length);
+        currentStream = newBuffer;
+        const partial = new TextDecoder().decode(Uint8Array.from(currentStream));
+        document.getElementById("liveOutput").textContent = partial;
+        log(`✏️ Partial chunk, total ${currentStream.length} bytes`);
+      };
+    
+
+    ws.onerror = (err) => log("❌ Error: " + err);
+    ws.onclose = () => log("🔌 Connection closed");
+
+    async function sendFullStream() {
+      const text = document.getElementById("textInput").value;
+      const messageId = document.getElementById("messageId").value;
+      const encoder = new TextEncoder();
+      const chunks = encoder.encode(text);
+
+      // 1. Send user_start
+      const startMsg = {
+        type: "user_start",
+        userId,
+        chatId,
+        messageId
+      };
+      ws.send(JSON.stringify(startMsg));
+      log("➡️ Sent: user_start");
+
+      // 2. Send binary in 8192-byte chunks with batching
+      const chunkSize = 8192;
+      const batchSize = 5;
+      const totalLength = chunks.length;
+
+      for (let i = 0; i < totalLength; i += chunkSize * batchSize) {
+        for (let j = 0; j < batchSize; j++) {
+          const start = i + j * chunkSize;
+          if (start >= totalLength) break;
+
+          const end = Math.min(start + chunkSize, totalLength);
+          const slice = chunks.slice(start, end);
+
+          ws.send(slice);
+          log(`➡️ Sent chunk [${start}–${end}]`);
+        }
+        await new Promise((res) => setTimeout(res, 10));
+      }
+
+      // 3. Send user_end
+      const endMsg = {
+        type: "user_end",
+        userId,
+        chatId,
+        messageId
+      };
+      ws.send(JSON.stringify(endMsg));
+      log("➡️ Sent: user_end");
+    }
+
+    function log(msg) {
+      const logEl = document.getElementById("log");
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  </script>
+
+</body>
+
+</html>
