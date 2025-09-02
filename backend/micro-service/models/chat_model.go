@@ -14,8 +14,17 @@ type Message struct {
 }
 
 type Memory struct {
-	Memid   string `bson:"memid" json:"memind"`
-	Context string `bson:"context" json:"context"`
+	Memid     string    `bson:"memid" json:"memid"`
+	Context   string    `bson:"context" json:"context"`
+	Persist   bool      `bson:"persist" json:"persist"`
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
+}
+
+type ChatMessages struct {
+	Messages map[string]Message `json:"messages"`
+	Order    []string           `json:"order"`
+	UserId   string             `json:"userId"`
+	ChatId   string             `json:"chatId"`
 }
 
 type Chat struct {

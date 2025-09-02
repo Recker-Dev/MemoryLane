@@ -15,7 +15,7 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 8192
+	maxMessageSize = 10 * 1024 * 1024
 )
 
 // Client represents a WebSocket connection.
@@ -42,7 +42,8 @@ func (c *Client) readPump() {
 			Action string `json:"action"` // "flush" or "del"
 		}
 		data, _ := json.Marshal(dbRequest{UserId: c.UserId, ChatId: c.ChatId, Action: "del"})
-		if err := c.Hub.Publisher.SendMessage("db_ops", fmt.Sprintf("dbops:%s:%s",c.UserId,c.ChatId), data); err != nil {
+		// Key is in dbops:userId:chatId format
+		if err := c.Hub.Publisher.SendMessage("db_ops", fmt.Sprintf("dbops:%s:%s", c.UserId, c.ChatId), data); err != nil {
 			log.Printf("[WS] Kafka publish failed for signal: %v", err)
 		}
 		log.Printf("✅ Raised Redis key delete for UserId: %s and ChatId: %s", c.UserId, c.ChatId)
@@ -57,49 +58,28 @@ func (c *Client) readPump() {
 		msgType, msg, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Read error %s_%s: %v", c.UserId, c.ChatId, err)
+				log.Printf("❌ WS read error %s_%s: %v", c.UserId, c.ChatId, err)
 			}
 			break
 		}
-		switch msgType {
-		case websocket.TextMessage:
-			var cntrl types.IncomingControl
-			if err := json.Unmarshal(msg, &cntrl); err != nil {
-				log.Printf("Unmarshal error %s_%s: %v", c.UserId, c.ChatId, err)
-				continue
-			}
 
-			// Construct the Kafka key once from full message ID
-			key := cntrl.UserId + "_" + cntrl.ChatId + "_" + cntrl.MessageId
-
-			switch cntrl.Type {
-			case "user_start":
-				if err := c.Hub.Publisher.SendMessage("user_query", key, msg); err != nil {
-					log.Printf("Kafka send error (user_start): %v", err)
-				}
-				c.CurrentMsgId = cntrl.MessageId
-			case "user_end":
-				if err := c.Hub.Publisher.SendMessage("user_query", key, msg); err != nil {
-					log.Printf("Kafka send error (user_end): %v", err)
-				}
-				c.CurrentMsgId = ""
-			default:
-				log.Printf("⚠️ Unknown message type")
-
-			}
-		case websocket.BinaryMessage:
-			key := c.UserId + "_" + c.ChatId + "_" + c.CurrentMsgId
-
-			if c.CurrentMsgId == "" {
-				log.Printf("⚠️ Binary chunk received before user_start for %s_%s", c.UserId, c.ChatId)
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte("Protocol violation: binary sent before user_start"))
-				return
-			}
-
-			if err := c.Hub.Publisher.SendMessage("user_query", key, msg); err != nil {
-				log.Printf("Kafka send error (chunk): %v", err)
-			}
+		if msgType != websocket.TextMessage {
+			log.Printf("⚠️ Ignoring non-text message for %s_%s", c.UserId, c.ChatId)
+			continue
 		}
+
+		var incoming types.IncomingQuery
+		if err := json.Unmarshal(msg, &incoming); err != nil {
+			log.Printf("❌ Unmarshal failed for %s_%s: %v", c.UserId, c.ChatId, err)
+			continue
+		}
+
+		key := incoming.UserId + "_" + incoming.ChatId // Key is in userId_chatId format
+
+		if err := c.Hub.Publisher.SendMessage("user_query", key, msg); err != nil {
+			log.Printf("❌ Kafka publish failed: %v", err)
+		}
+
 	}
 }
 
@@ -117,15 +97,14 @@ func (c *Client) writePump() {
 				return
 			}
 			switch m := msg.(type) {
-			case types.OutgoingMessage:
-				b, err := json.Marshal(m)
-				if err != nil {
-					log.Println("marshal", err)
-					continue
+			case []byte:
+				// Forward raw payload from Kafka
+				if err := c.Conn.WriteMessage(websocket.TextMessage, m); err != nil {
+					log.Println("write error:", err)
+					return
 				}
-				c.Conn.WriteMessage(websocket.TextMessage, b)
-			case types.OutgoingBinary:
-				c.Conn.WriteMessage(websocket.BinaryMessage, m.Data)
+			default:
+				log.Printf("⚠️ Dropping unexpected type in writePump: %T", m)
 			}
 
 		case <-ticker.C:
@@ -135,10 +114,10 @@ func (c *Client) writePump() {
 	}
 }
 
-func (c *Client) SendToWritePump(payload []byte) {
+func (c *Client) SendToWritePump(msg interface{}) {
 	select {
-	case c.Send <- types.OutgoingBinary{Data: payload}:
+	case c.Send <- msg:
 	default:
-		log.Printf("Send buffer full for %s_%s — dropping chunk", c.UserId, c.ChatId)
+		log.Printf("Send buffer full for %s_%s — dropping message", c.UserId, c.ChatId)
 	}
 }

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import clsx from 'clsx';
+import { useAddChatFiles } from '@/features/file/custom-hooks/useAddChatFile';
+import toast from 'react-hot-toast';
 
 // This component provides a UI for file uploading with drag-and-drop.
 // It includes an overlay, file type validation (PDF, images),
@@ -33,6 +35,8 @@ export const FileUploadForm: React.FC<FileUploadFormProps> = ({
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [errors, setErrors] = useState<string[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const { addChatFiles } = useAddChatFiles();
 
     // Callback to validate files
     const validateFiles = useCallback((files: FileList | File[]) => {
@@ -84,18 +88,18 @@ export const FileUploadForm: React.FC<FileUploadFormProps> = ({
     }, [onClose]);
 
     // Handle "Upload" button click (conceptual)
-    const handleUploadClick = useCallback(() => {
+    const handleUploadClick = useCallback(async () => {
         if (selectedFiles.length === 0) {
             return; // Should be disabled by the button's disabled prop
         }
-        console.log('Uploading files:', selectedFiles.map(file => file.name));
-        // Simulate upload process
-        // In a real app, you'd send files to a server here
-        setTimeout(() => {
-            alert('Files uploaded successfully (simulated)!'); // Using alert for demo, replace with toast
-            handleCancelClick(); // Close form after simulated upload
-        }, 1000);
-    }, [selectedFiles, errors, handleCancelClick]);
+        const result = await addChatFiles({ selectedFiles });
+        if (result.success) {
+            toast.success("Files uploaded!");
+        } else {
+            toast.error(result.error || "Ran into error while uploading files.");
+        }
+        handleCancelClick();
+    }, [selectedFiles, errors, handleCancelClick, addChatFiles]);
 
     // Effect for Escape key press to close the form
     useEffect(() => {

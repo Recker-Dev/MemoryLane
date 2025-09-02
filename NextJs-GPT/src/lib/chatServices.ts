@@ -3,46 +3,35 @@ import { type MessageBubbleProps } from '@/components/ui/MessageBubble';
 import { type Memory } from '@/components/widgets/ChatMemoriesDropdown';
 
 
-export async function fetchChatHeads(userId: string): Promise<{ success: boolean, message: string | ChatHead[] }> {
-    console.log("✅ Fetching ChatHeads for userId:", userId);
-    const response = await fetch(`http://localhost:3001/chatHeads/${userId}`);
+export async function fetchChatHeadsApiHelper(userId: string): Promise<any> {
+    const response = await fetch(`http://localhost:8080/chatHeads/${userId}`,
+        { method: "GET" }
+    );
 
     if (!response.ok) {
-        console.error("❌ Failed to fetch chat heads: ", response);
-        return {
-            success: false,
-            message: await response.text()
-        };
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
-    // Handle success case
     const data = await response.json();
-    return {
-        success: true,
-        message: data
-    };
+    return data;
 }
 
-export async function fetchMessages(userId: string, chatId: string): Promise<{ success: boolean, message: string | MessageBubbleProps[] }> {
-    const response = await fetch(`http://localhost:3001/chats/${userId}/${chatId}`);
-    console.log("✅ Fetching ChatHistory for userId:", userId, "and chatId:", chatId);
+export async function fetchChatHistoryApiHelper(userId: string, chatId: string): Promise<any> {
+    console.log("APPPPPPPPIIIIIIIIIIII BOIIIIIIIII")
+    const response = await fetch(`http://localhost:8080/chats/${userId}/${chatId}`);
     if (!response.ok) {
-        console.error("❌ Failed to fetch chat history: ", response);
-        return {
-            success: false,
-            message: await response.text()
-        };
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
-    // Handle a sucess
     const data = await response.json()
-    return {
-        success: true,
-        message: data
-    };
+    return data;
 }
 
-export async function getAiResponse(userId: string, chatId: string, text: string, selected_memories:Memory[]): Promise<
+export async function getAiResponse(userId: string, chatId: string, text: string, selected_memories: Memory[]): Promise<
     { success: true, message: MessageBubbleProps } |
     { success: false, message: string }> {
 
@@ -51,7 +40,7 @@ export async function getAiResponse(userId: string, chatId: string, text: string
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: { text: text, selected_memories:selected_memories } }),
+        body: JSON.stringify({ message: { text: text, selected_memories: selected_memories } }),
     });
 
     if (!response.ok) {
@@ -99,158 +88,186 @@ export async function pushToPendingMessages(userId: string, chatId: string, mess
 
 }
 
-// export async function updatePendingMessages(userId: string, chatId: string, pendingMessages: MessageBubbleProps[]): Promise<{ success: boolean, message: string }> {
-//     if (!pendingMessages || pendingMessages.length === 0) {
-//         console.log("❌ No pending messages to update");
 
-//         return {
-//             success: true,
-//             message: "No pending messages to update"
-//         };
-//     }
+export async function createNewChatApiHelper(userId: string, chatName: string): Promise<any> {
 
-//     const response = await fetch(`http://localhost:3001/chats/${userId}/${chatId}`, {
-//         method: 'POST',
-//         headers: {
-//             'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({ messages: pendingMessages }),
-//     });
-
-//     if (!response.ok) {
-//         console.error("❌ Failed to update pending messages:", response);
-//         return {
-//             success: false,
-//             message: await response.text()
-//         };
-//     }
-
-//     console.log("✅ Pending Messages Updated");
-//     return {
-//         success: true,
-//         message: "Pending Messages Updated"
-//     };
-// }
-
-export async function createNewChatHeadAPI(userId: string, chatHead: ChatHead): Promise<{ success: boolean, message: string }> {
-
-    const response = await fetch(`http://localhost:3001/createChat/${userId}`, {
+    const response = await fetch(`http://localhost:8080/createChat/${userId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ chatId: chatHead.chatId, name: chatHead.name }),
+        body: JSON.stringify({ name: chatName }),
     });
 
     if (!response.ok) {
-        console.error("❌ Failed to create new chat head:", response);
-        return {
-            success: false,
-            message: await response.text()
-        };
-
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
-    console.log("✅ New Chat Head Created");
-    return {
-        success: true,
-        message: "New Chat Head Created"
-    };
+    const data = await response.json();
+    return data;
 
 }
 
 
-export async function deleteChatHeadAPI(userId: string, chatId: string): Promise<{ success: boolean, message: string }> {
+export async function deleteChatApiHelper(userId: string, chatId: string): Promise<any> {
 
-    const response = await fetch(`http://localhost:3001/delChatHead/${userId}/${chatId}`, {
+    const response = await fetch(`http://localhost:8080/deleteChat/${userId}/${chatId}`, {
         method: 'DELETE'
     });
 
     if (!response.ok) {
-        console.error("❌ Failed to delete chat head");
-        return {
-            success: false,
-            message: await response.text()
-        };
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
-    console.log("✅ Chat Head Deleted");
-    return {
-        success: true,
-        message: "Chat Head Deleted"
-    };
+    const data = await response.json();
+    return data;
 
 }
 
 
-export async function addMemory(userId: string, chatId: string, memory: Memory): Promise<{ success: boolean, message: string }> {
+export async function addChatMemoryApiHelper(userId: string, chatId: string, memoryContext: string): Promise<any> {
 
-    const response = await fetch(`http://localhost:3001/addMemory/${userId}/${chatId}`, {
+    const response = await fetch(`http://localhost:8080/addMemory/${userId}/${chatId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ mem_id: memory.mem_id, context: memory.context, tags: memory.tags }),
+        body: JSON.stringify({ context: memoryContext }),
     });
 
     if (!response.ok) {
-        console.error("❌ Failed to add memory");
-        return {
-            success: false,
-            message: await response.text()
-        };
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
-    console.log("✅ Memory Added");
-    return {
-        success: true,
-        message: "Memory Added"
-    };
+    const data = await response.json();
+    return data;
 
 }
 
-export async function getMemories(userId: string, chatId: string): Promise<{ success: boolean, message: string | Memory[] }> {
+export async function getMemoriesApiHelper(userId: string, chatId: string): Promise<any> {
 
-    const response = await fetch(`http://localhost:3001/memories/${userId}/${chatId}`);
+    const response = await fetch(`http://localhost:8080/memories/${userId}/${chatId}`);
 
     if (!response.ok) {
-        console.error("❌ Failed to fetch memories");
-        return {
-            success: false,
-            message: await response.text()
-        };
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
-    console.log("✅ Memories Fetched");
-    return {
-        success: true,
-        message: await response.json()
-    };
+    const data = await response.json();
+    return data;
 
 }
 
 
-export async function deleteMemory(userId: string, chatId: string, memoryId: string): Promise<{ success: boolean, message: string }> {
+export async function toggleMemoryPersistanceApiHelper(userId: string, chatId: string, memId: string, setVal: boolean): Promise<any> {
+    const response = await fetch(`http://localhost:8080/setMemoryPersist/${userId}/${chatId}/${memId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ persist: setVal }),
 
-    const response = await fetch(`http://localhost:3001/delMemory/${userId}/${chatId}/${memoryId}`, {
+
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
+    }
+    const data = await response.json();
+    return data;
+}
+
+export async function deleteMemoryApiHelper(userId: string, chatId: string, memoryId: string): Promise<any> {
+
+    const response = await fetch(`http://localhost:8080/deleteMemory/${userId}/${chatId}/${memoryId}`, {
         method: 'DELETE'
     });
 
     if (!response.ok) {
-        console.error("❌ Failed to delete memory");
-        return {
-            success: false,
-            message: await response.text()
-        };
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
+    }
+    const data = await response.json();
+    return data;
+
+}
+
+export async function addChatFileApiHelper(userId: string, chatId: string, files: File[]): Promise<any> {
+    const formData = new FormData();
+
+    // append multiple files under key "files"
+    files.forEach((file) => { formData.append("files", file); });
+
+    const response = await fetch(`http://localhost:8080/uploadFiles/${userId}/${chatId}`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
+    }
+    const data = await response.json();
+    return data;
+
+}
+
+export async function getChatFilesApiHelper(userId: string, chatId: string): Promise<any> {
+    const response = await fetch(`http://localhost:8080/getFilesData/${userId}/${chatId}`);
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
     }
 
+    const data = await response.json();
+    return data;
+}
 
-    console.log("✅ Memory Deleted");
-    return {
-        success: true,
-        message: "Memory Deleted"
-    };
+export async function deleteChatFilesApiHelper(userId: string, chatId: string, fileIds: string[]): Promise<any> {
+    const response = await fetch(`http://localhost:8080/deleteFiles/${userId}/${chatId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ file_ids: fileIds }),
+    });
 
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData);
+        return errorData;
+    }
+
+    const data = await response.json();
+    return data;
+}
+
+export async function toggleFilePersistanceApiHelper(userId: string, chatId: string, fileId: string, setVal: boolean): Promise<any> {
+    const response = await fetch(`http://localhost:8080/setFilePersist/${userId}/${chatId}/${fileId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ persist: setVal }),
+
+
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData)
+        return errorData;
+    }
+    const data = await response.json();
+    return data;
 }
 
 export async function fetchRelevantMemories(userId: string, chatId: string, mem_ids: string, tags: string, current_context: string): Promise<{ success: boolean, message: string | Memory[] }> {
@@ -268,8 +285,7 @@ export async function fetchRelevantMemories(userId: string, chatId: string, mem_
             }),
         });
 
-    if(!response.ok)
-    {
+    if (!response.ok) {
         console.error("❌ Failed to fetch relevant memories");
         return {
             success: false,
@@ -283,4 +299,41 @@ export async function fetchRelevantMemories(userId: string, chatId: string, mem_
         message: await response.json()
     }
 
+}
+
+
+export function createChatWebSocket(userId: string, chatId: string,) {
+    const ws = new WebSocket(`ws://localhost:8082/ws?userId=${userId}&chatId=${chatId}`);
+    ws.binaryType = "arraybuffer"
+
+    const sendJson = (msg: any) => {
+        if (ws.readyState == WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+        }
+    };
+
+    return ws;
+}
+
+export async function sendChatMessage(ws: WebSocket,
+    userId: string,
+    chatId: string,
+    messageId: string,
+    text: string,
+    fileIds: string[] = [],
+    memIds: string[] = [],
+) {
+
+    const payload = {
+        msgId: messageId,
+        chatId: chatId,
+        userId: userId,
+        role: "user",
+        content: text,
+        fileIds: fileIds,
+        memIds: memIds,
+        timestamp: new Date().toISOString(), // frontend timestamp
+    };
+
+    ws.send(JSON.stringify(payload));
 }

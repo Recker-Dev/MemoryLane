@@ -28,7 +28,7 @@ func main() {
 	publisherHandler := kafka.InitProducer(brokers)
 
 	// Handle Vector Docs Creation and Deletion
-	go kafka.StartVectorFileConsumer(brokers, "vectorize_file", "vector_group")
+	go kafka.StartVectorFileConsumer(brokers, "vectorize_file", "vector_group", publisherHandler)
 
 	// Handle User Query Processing and server-reply publishing
 	go kafka.StartUserQueryProcessing(brokers, "user_query", "ws_server_group", publisherHandler)

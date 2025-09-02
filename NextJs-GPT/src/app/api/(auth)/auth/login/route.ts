@@ -1,17 +1,29 @@
-import { NextRequest, NextResponse,  } from "next/server";
-import { validateUser } from "@/lib/auth/authServices";
+import { NextRequest, NextResponse, } from "next/server";
 import { createJWT } from "@/lib/auth/jwt";
 import { cookies } from "next/headers";
 
 interface AuthError {
-  message: string;
+    message: string;
 }
 
 
 export async function POST(request: NextRequest) {
     const { email, password } = await request.json();
     try {
-        const data = await validateUser(email, password);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_ENDPOINT}/validateUser`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email, password }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Login failed.");
+        }
+
+        const data = await response.json();
 
         // Create JWT payload
         const token = await createJWT(data.userId, data.email);
@@ -25,17 +37,10 @@ export async function POST(request: NextRequest) {
             maxAge: 60 * 60 * 24 * 3, // 3 days
         });
 
-        // Create the response object first
-        const response = NextResponse.json({
-            success: true,
-            userId: data.userId,
-            email: data.email,
-        });
-
-        return response;
+        return NextResponse.json(data)
     }
     catch (error) {
-        const typedError = error as AuthError;
+        const typedError = error as Error;
         console.error("Login error:", typedError.message);
         return NextResponse.json({ error: typedError.message || "Login failed." }, { status: 400 });
     }

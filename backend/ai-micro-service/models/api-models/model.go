@@ -15,6 +15,9 @@ type Upload struct {
 	Path              string             `bson:"path" json:"path"`
 	CreatedAt         time.Time          `bson:"createdAt" json:"createdAt"`
 	IsVectorDBCreated bool               `bson:"isVectorDBcreated" json:"isVectorDBcreated"`
+	Status            string             `bson:"status" json:"status"`
+	Error             string             `bson:"error" json:"error"`
+	Persist           bool               `bson:"persist" json:"persist"`
 }
 
 type Message struct {

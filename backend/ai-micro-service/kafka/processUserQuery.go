@@ -4,14 +4,11 @@ package kafka
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
-	"github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/config"
 	aiservices "github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/services/ai-services"
 	"github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/types"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/IBM/sarama"
 )
@@ -49,133 +46,92 @@ func (inputHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
 func (inputHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
 
 func (h *inputHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+
 	for msg := range claim.Messages() {
 		key := string(msg.Key)
-		val := msg.Value
-
-		var cntrl types.IncomingControl
-		if err := json.Unmarshal(val, &cntrl); err == nil {
-
-			switch {
-			case cntrl.Type == "user_start":
-
-				// Save fileids and memids in Redis (sub-key) hash
-				h.storeField(key, "fileIds", cntrl.SelectedFileIds)
-				h.storeField(key, "memIds", cntrl.SelectedMemories)
-
-				// Initialize empty query
-				h.storeField(key, "query", []byte{})
-
-			case cntrl.Type == "user_end":
-
-				// Full query fetch
-				fullQuery, err := config.RedisClient.HGet(context.Background(), key, "query").Bytes()
-				if err != nil {
-					log.Printf("[QueryProcessingConsumerGroup] Redis HGet {query} failed: %v", err)
-					return err
-				}
-
-				// Fetch fileIds
-				fileIds, err := getField[[]string](key, "fileIds")
-				if err != nil {
-					log.Printf("[QueryProcessingConsumerGroup] Error getting fileIds: %v", err)
-					return err
-				}
-
-				// Fetch memIds
-				memIds, err := getField[[]string](key, "memIds")
-				if err != nil {
-					log.Printf("[QueryProcessingConsumerGroup] Error getting memIds: %v", err)
-					return err
-				}
-
-				// Process user query
-				err = aiservices.StreamUserQueryResponse(cntrl.UserId, cntrl.ChatId, string(fullQuery), fileIds, memIds, func(chunk string) {
-					if err := h.publisher.SendMessage("server_reply", key, []byte(chunk)); err != nil {
-						log.Printf("[QueryProcessingConsumerGroup] Kafka publish failed for chunk: %v", err)
-					}
-				}, func(signal string) {
-					type dbRequest struct {
-						UserId string `json:"userId"`
-						ChatId string `json:"chatId"`
-						Action string `json:"action"` // "flush" or "del"
-					}
-					data, _ := json.Marshal(dbRequest{UserId: cntrl.UserId, ChatId: cntrl.ChatId, Action: signal})
-					if err := h.publisher.SendMessage("db_ops", key, data); err != nil {
-						log.Printf("[QueryProcessingConsumerGroup] Kafka publish failed for signal: %v", err)
-					}
-					log.Printf("✅ Raised DB flush ticket for UserId: %s and ChatId: %s", cntrl.UserId, cntrl.ChatId)
-				})
-
-				if err != nil {
-					log.Printf("[QueryProcessingConsumerGroup] Failed to stream Gemini response: %v", err)
-				}
-
-				// Clean up Redis (sub-key) hash
-				if err := config.RedisClient.Del(context.Background(), key).Err(); err != nil {
-					log.Printf("[QueryProcessingConsumerGroup] Failed to delete Redis key after processing: %v", err)
-				}
-			}
-
-		} else {
-			// Append query chunk
-			h.appendQueryChunk(key, val)
+		log.Printf("ATEEEEENTAAIISAFDF %s", key)
+		var incoming types.IncomingQuery
+		if err := json.Unmarshal(msg.Value, &incoming); err != nil {
+			log.Printf("❌ Failed to unmarshal IncomingQuery: %v", err)
+			sess.MarkMessage(msg, "") // mark to avoid re-processing bad payloads
+			continue
 		}
-		// Acknowledge message
+
+		// Send "start" control before streaming
+		start := types.OutgoingMessage{
+			Type:   "control",
+			MsgId:  incoming.MsgId,
+			ChatId: incoming.ChatId,
+			UserId: incoming.UserId,
+			Role:   "ai",
+			Signal: "start",
+		}
+		if data, err := json.Marshal(start); err == nil {
+			if err := h.publisher.SendMessage("server_reply", key, data); err != nil {
+				log.Printf("❌ Kafka publish failed (start control): %v", err)
+			}
+		} else {
+			log.Printf("❌ Failed to marshal start control: %v", err)
+		}
+
+		// Process user query
+		err := aiservices.StreamUserQueryResponse(
+			incoming.UserId, incoming.ChatId, incoming.Content,
+			incoming.FileIds, incoming.MemIds,
+			func(chunk string, chunkIdx int) {
+				out := types.OutgoingMessage{
+					Type:     "chunk",
+					MsgId:    incoming.MsgId,
+					ChatId:   incoming.ChatId,
+					UserId:   incoming.UserId,
+					Role:     "ai",
+					Content:  chunk,
+					ChunkIdx: chunkIdx,
+				}
+				if data, err := json.Marshal(out); err == nil {
+					if err := h.publisher.SendMessage("server_reply", key, data); err != nil {
+						log.Printf("❌ Kafka publish failed (chunk %d): %v", chunkIdx, err)
+					}
+				} else {
+					log.Printf("❌ Failed to marshal chunk %d: %v", chunkIdx, err)
+				}
+			}, func(signal string) {
+				type dbRequest struct {
+					UserId string `json:"userId"`
+					ChatId string `json:"chatId"`
+					Action string `json:"action"` // "flush" or "del"
+				}
+				data, _ := json.Marshal(dbRequest{UserId: incoming.UserId, ChatId: incoming.ChatId, Action: signal})
+				if err := h.publisher.SendMessage("db_ops", key, data); err != nil {
+					log.Printf("[QueryProcessingConsumerGroup] Kafka publish failed for signal: %v", err)
+				}
+				log.Printf("✅ Raised DB flush ticket for UserId: %s and ChatId: %s", incoming.UserId, incoming.ChatId)
+			})
+
+		if err != nil {
+			log.Printf("[QueryProcessingConsumerGroup] Failed to stream Gemini response: %v", err)
+		}
+
+		// After streaming is done
+		end := types.OutgoingMessage{
+			Type:   "control",
+			MsgId:  incoming.MsgId,
+			ChatId: incoming.ChatId,
+			UserId: incoming.UserId,
+			Role:   "ai",
+			Signal: "end",
+		}
+		if data, err := json.Marshal(end); err == nil {
+			if err := h.publisher.SendMessage("server_reply", key, data); err != nil {
+				log.Printf("❌ Kafka publish failed (end control): %v", err)
+			}
+		} else {
+			log.Printf("❌ Failed to marshal end control: %v", err)
+		}
+
+		// Commit offset
 		sess.MarkMessage(msg, "")
 	}
+
 	return nil
-}
-
-// Helper: store field in Redis Hash
-func (h *inputHandler) storeField(key string, field string, data interface{}) {
-	var setErr error
-	switch d := data.(type) {
-	case []byte:
-		setErr = config.RedisClient.HSet(context.Background(), key, field, d).Err()
-	case []string:
-		jsonVal, err := json.Marshal(d)
-		if err != nil {
-			log.Printf("[QueryProcessingConsumerGroup] JSON marshal error: %v", err)
-			return
-		}
-		setErr = config.RedisClient.HSet(context.Background(), key, field, jsonVal).Err()
-	default:
-		log.Printf("[QueryProcessingConsumerGroup] Unsupported type in storeField: %T", d)
-		return
-	}
-	if setErr != nil {
-		log.Printf("[QueryProcessingConsumerGroup] Redis HSet error: %v", setErr)
-	} else {
-		// Set TTL of 1 hour (3600 seconds) for the key
-		if err := config.RedisClient.Expire(context.Background(), key, time.Hour).Err(); err != nil {
-			log.Printf("[QueryProcessingConsumerGroup] Redis Expire error: %v", err)
-		}
-	}
-}
-
-func getField[T any](key, field string) (T, error) {
-	var result T
-
-	data, err := config.RedisClient.HGet(context.Background(), key, field).Bytes()
-	if err != nil {
-		return result, fmt.Errorf("redis HGet %s failed: %w", field, err)
-	}
-
-	if err := json.Unmarshal(data, &result); err != nil {
-		return result, fmt.Errorf("unmarshal %s failed: %w", field, err)
-	}
-	return result, nil
-}
-
-func (h *inputHandler) appendQueryChunk(key string, chunk []byte) {
-	current, err := config.RedisClient.HGet(context.Background(), key, "query").Bytes()
-	if err != nil && err != redis.Nil {
-		log.Printf("[QueryProcessingConsumerGroup] Redis HGet error during append: %v", err)
-		return
-	}
-	combined := append(current, chunk...)
-	if err := config.RedisClient.HSet(context.Background(), key, "query", combined).Err(); err != nil {
-		log.Printf("[QueryProcessingConsumerGroup] Redis HSet error during append: %v", err)
-	}
 }

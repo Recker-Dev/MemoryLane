@@ -1,17 +1,18 @@
 import { create } from 'zustand';
-import { FileUiType } from '@/components/widgets/ChatFilesDropdown';
+import { FileType } from '@/components/widgets/ChatFilesDropdown';
 
 export type FileStore = {
 
-    chatFiles: FileUiType[],
-    setChatFiles: (files: FileUiType[]) => void,
-    removeFileById: (id: string) => void,
-    reset: () => void
+    chatFiles: FileType[],
+    setChatFiles: (files: FileType[]) => void,
+    addChatFiles: (file: FileType) => void,
+    removeChatFileById: (id: string) => void,
+    resetFilesData: () => void
 
 
-    selectedFiles: FileUiType[],
-    appendToSelectedFiles: (file: FileUiType) => void,
-    removeFromSelectedFiles: (file: FileUiType) => void,
+    selectedFiles: FileType[],
+    appendToSelectedFiles: (file: FileType) => void,
+    removeFromSelectedFiles: (file: FileType) => void,
     resetSelectedFiles: () => void
 }
 
@@ -23,11 +24,17 @@ export const useFileStore = create<FileStore>((set) => ({
         chatFiles: files
     })),
 
-    removeFileById: (id) => set((state) => ({
-        chatFiles: state.chatFiles.filter((file) => file.file_id !== id)
+    addChatFiles: (file) => set((state) => {
+    const updated = [...state.chatFiles, file];
+    updated.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    return { chatFiles: updated };
+  }),
+
+    removeChatFileById: (id) => set((state) => ({
+        chatFiles: state.chatFiles.filter((file) => file.fileId !== id)
     })),
 
-    reset: () => set({
+    resetFilesData: () => set({
         chatFiles: [],
     }),
 
@@ -40,7 +47,7 @@ export const useFileStore = create<FileStore>((set) => ({
     })),
 
     removeFromSelectedFiles: (file) => set((state) => { return { // Or use {return {}}
-        selectedFiles: state.selectedFiles.filter((fl) => fl.file_id !== file.file_id) 
+        selectedFiles: state.selectedFiles.filter((fl) => fl.fileId !== file.fileId) 
     }}), 
 
     resetSelectedFiles: () => set({

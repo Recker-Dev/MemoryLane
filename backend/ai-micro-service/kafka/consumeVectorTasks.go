@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 	apimodels "github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/models/api-models"
 	databaseservices "github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/services/database-services"
 	grpcservices "github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/services/grpc-services"
+	"github.com/Recker-Dev/NextJs-GPT/backend/ai-micro-service/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -25,7 +27,7 @@ type VectorizationTask struct {
 }
 
 // StartVectorFileConsumer starts consuming the vectorize_file topic
-func StartVectorFileConsumer(brokers []string, topic, groupId string) {
+func StartVectorFileConsumer(brokers []string, topic, groupId string, publisher *PublisherHandler) {
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_8_0_0
 	config.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRange()
@@ -36,7 +38,9 @@ func StartVectorFileConsumer(brokers []string, topic, groupId string) {
 		log.Fatalf("[VectorTaskConsumerGroup] group error: %v", err)
 	}
 
-	handler := &vectorTaskConsumerHandler{}
+	handler := &vectorTaskConsumerHandler{
+		publisher: publisher,
+	}
 	ctx := context.Background()
 
 	for {
@@ -46,7 +50,9 @@ func StartVectorFileConsumer(brokers []string, topic, groupId string) {
 	}
 }
 
-type vectorTaskConsumerHandler struct{}
+type vectorTaskConsumerHandler struct {
+	publisher *PublisherHandler
+}
 
 func (vectorTaskConsumerHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
 func (vectorTaskConsumerHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
@@ -62,126 +68,188 @@ func (h *vectorTaskConsumerHandler) ConsumeClaim(sess sarama.ConsumerGroupSessio
 
 		switch task.Operation {
 		case "vectorize":
-			go handleVectorization(task)
+			taskCopy := task
+			go func(task *VectorizationTask, msg *sarama.ConsumerMessage) {
+				if err := handleVectorization(*task, h); err != nil {
+					log.Printf("[VectorTaskConsumerGroup] vectorization failed: %v", err)
+					// ❌ don't mark -> message will be retried on restart
+					return
+				}
+				sess.MarkMessage(msg, "") // ✅ only mark after success/fail handled
+			}(&taskCopy, msg)
 		case "delete":
-			go handleVectorDocDeletion(task)
+			taskCopy := task
+			go func(task *VectorizationTask, msg *sarama.ConsumerMessage) {
+				if err := handleVectorDocDeletion(*task, h); err != nil {
+					log.Printf("[VectorTaskConsumerGroup] vectorization failed: %v", err)
+					// ❌ don't mark -> message will be retried on restart
+					return
+				}
+				sess.MarkMessage(msg, "") // ✅ only mark after success/fail handled
+			}(&taskCopy, msg)
 		default:
 			log.Printf("[VectorTaskConsumerGroup] Unknown operation: %s", task.Operation)
+			sess.MarkMessage(msg, "")
 		}
-
-		sess.MarkMessage(msg, "")
 	}
 	return nil
 }
 
 // These should be implemented somewhere else in your service
-func handleVectorization(task VectorizationTask) {
+func handleVectorization(task VectorizationTask, h *vectorTaskConsumerHandler) error {
 	log.Printf("[VectorTaskConsumerGroup] Vectorizing file: %s for user=%s chat=%s", task.FileName, task.UserID, task.ChatID)
 
-	// Validate ObjectID
-	fileObjID, err := primitive.ObjectIDFromHex(task.FileID)
+	// Step 1: Parse ObjectID
+	objID, err := primitive.ObjectIDFromHex(task.FileID)
 	if err != nil {
-		log.Printf("[handleVectorization (Consumer)] Invalid fileId: %s", task.FileID)
-		return
+		log.Printf("[handleVectorization] Invalid fileId: %s", task.FileID)
+		publishStatus(h, "vectorization_status", task, apimodels.Upload{}, "error", fmt.Sprintf("invalid ObjectID: %v", err))
+		return err
 	}
 
-	// Create a valid filter condition to shorlist PDF and isVectorDBcreated: false from all uploaded Ids.
+	// Step 2: Query DB for valid PDFs pending vectorization
 	findValidIdFilter := bson.M{
-		"_id":               fileObjID,
+		"_id":               objID,
 		"fileType":          "application/pdf",
 		"isVectorDBcreated": false,
 	}
 
-	// // Step 1: Query DB for valid pdfs out of the uploaded Ids.
 	pdfEntry, err := databaseservices.FindExactlyOne[apimodels.Upload](
 		os.Getenv("FILE_COLLECTION"),
 		findValidIdFilter,
 	)
 	if err != nil {
-		log.Printf("[handleVectorization (Consumer)] Error fetching PDF that are pending vectorization: %v", err.Error())
-		return
+		log.Printf("[handleVectorization] DB query error: %v", err.Error())
+		publishStatus(h, "vectorization_status", task, apimodels.Upload{}, "error", err.Error())
+		return err
 	}
 
-	// 🛡️ Ensure we have a valid document
 	if pdfEntry.ID.IsZero() {
-		log.Printf("[handleVectorization (Consumer)] No matching file found for vectorization")
-		return
+		log.Printf("[handleVectorization] No matching file found for vectorization")
+		err := "no matching file found"
+		publishStatus(h, "vectorization_status", task, apimodels.Upload{}, "error", err)
+		return fmt.Errorf("%s", err)
 	}
 
-	// Step 2: Call vectorizer gRPC service
+	// Step 3: Call gRPC vectorizer
 	err = grpcservices.SendFileToPythonVectorizer(pdfEntry)
+
+	status := "success"
+	errorMsg := ""
+
 	if err != nil {
-		log.Printf("[handleVectorization (Consumer)] gRPC Vectorizer error for file=%s: %v", task.FileName, err)
-		return
-	}
+		status = "failed"
+		errorMsg = err.Error()
 
-	// Step 3: Update DB to mark file as vectorized
-	update := bson.M{"$set": bson.M{"isVectorDBcreated": true}}
-
-	if err := databaseservices.UpdateOneByID(
-		os.Getenv("FILE_COLLECTION"),
-		pdfEntry.ID,
-		update,
-	); err != nil {
-		log.Printf("[handleVectorization (Consumer)] Failed to update vector status in DB: %v", err)
+		// Update DB: failed vectorization
+		update := bson.M{
+			"$set": bson.M{
+				"isVectorDBcreated": false,
+				"status":            status,
+				"error":             errorMsg,
+			},
+		}
+		_ = databaseservices.UpdateOneByID(os.Getenv("FILE_COLLECTION"), pdfEntry.ID, update)
+		log.Printf("[handleVectorization] Vectorization FAILED: %v", err)
 	} else {
-		log.Printf("[handleVectorization (Consumer)] DB updated: (%s) file marked as vectorized", task.FileID)
+		// Update DB: success
+		update := bson.M{
+			"$set": bson.M{
+				"isVectorDBcreated": true,
+				"status":            status,
+			},
+		}
+		if err := databaseservices.UpdateOneByID(os.Getenv("FILE_COLLECTION"), pdfEntry.ID, update); err != nil {
+			log.Printf("[handleVectorization] Failed to update DB after success: %v", err)
+		} else {
+			log.Printf("[handleVectorization] File %s marked as vectorized", task.FileID)
+		}
 	}
+
+	// Step 4: Publish final status to Kafka
+	publishStatus(h, "vectorization_status", task, pdfEntry, status, errorMsg)
+
+	return nil
 }
 
-func handleVectorDocDeletion(task VectorizationTask) {
-	log.Printf("[VectorTaskConsumerGroup] Deleting vector for fileId=%s user=%s chat=%s", task.FileID, task.UserID, task.ChatID)
+func handleVectorDocDeletion(task VectorizationTask, h *vectorTaskConsumerHandler) error {
+	log.Printf("[VectorTaskConsumerGroup] Deleting vector for fileId=%s user=%s chat=%s",
+		task.FileID, task.UserID, task.ChatID)
 
-	// TODO: Call deletion logic (e.g., remove vector entry from DB)
-	// example:
-	// err := vectorizer.DeleteVector(task.FileID)
-
-	// Step 1: Convert string to ObjectID
-	fileObjID, err := primitive.ObjectIDFromHex(task.FileID)
-	if err != nil {
-		log.Printf("[handleVectorDocDeletion (Consumer)] Invalid fileId: %s", task.FileID)
-		return
-	}
-
-	// Step 2: Check if the file exists and has vector data
-	filter := bson.M{"_id": fileObjID, "isVectorDBcreated": true}
-	pdfEntry, err := databaseservices.FindExactlyOne[apimodels.Upload](
-		os.Getenv("FILE_COLLECTION"),
-		filter,
+	var (
+		fileEntry apimodels.Upload
+		status    = "deleted" // assume success, override on error
+		errorMsg  string
 	)
-	if err != nil {
-		log.Printf("[handleVectorDocDeletion (Consumer)] Could not find file in DB or error occurred: %v", err)
-		return
-	}
-	if pdfEntry.ID.IsZero() {
-		log.Printf("[handleVectorDocDeletion (Consumer)] No matching file with vector DB found")
-		return
-	}
 
-	// Step 3: Call vector store deletion logic
-	_, err = grpcservices.RequestDeleteDocsToPythonVectorizer([]apimodels.Upload{pdfEntry})
-	if err != nil {
-		log.Printf("[handleVectorDocDeletion (Consumer)] Vector docs deletion failed for file=%s: %v", task.FileID, err)
-		return
-	}
-
-	log.Printf("[handleVectorDocDeletion (Consumer)] Vector docs successfully deleted for file=%s", task.FileID)
-
-	// Step 4: Mark isVectorDBcreated as false in DB
-	collection := config.GetCollection(os.Getenv("FILE_COLLECTION"))
-
+	// Step 1: Parse ObjectID
 	objID, err := primitive.ObjectIDFromHex(task.FileID)
 	if err != nil {
-		log.Printf("[handleVectorDocDeletion (Consumer)] Invalid fileId=%s: %v", task.FileID, err)
+		publishStatus(h, "deletion_status", task, fileEntry, "error", fmt.Sprintf("invalid ObjectID: %v", err))
+		return err
+	}
+
+	// Step 2: Fetch file entry
+	filter := bson.M{"_id": objID}
+	fileEntry, err = databaseservices.FindExactlyOne[apimodels.Upload](os.Getenv("FILE_COLLECTION"), filter)
+	if err != nil {
+		publishStatus(h, "deletion_status", task, fileEntry, "error", fmt.Sprintf("fetch error: %v", err))
+		return err
+	}
+
+	// Step 3: Delete from vectorizer if needed
+	if fileEntry.IsVectorDBCreated {
+		if _, err := grpcservices.RequestDeleteDocsToPythonVectorizer([]apimodels.Upload{fileEntry}); err != nil {
+			log.Printf("[handleVectorDocDeletion] Vector docs deletion failed for file=%s: %v", task.FileID, err)
+			status = "error"
+			errorMsg = fmt.Sprintf("vector deletion failed: %v", err)
+		} else {
+			log.Printf("[handleVectorDocDeletion] Vector docs deleted for file=%s", task.FileID)
+		}
+	}
+
+	// Step 4: Remove file entry from DB
+	collection := config.GetCollection(os.Getenv("FILE_COLLECTION"))
+	if _, err := collection.DeleteOne(context.TODO(), filter); err != nil {
+		log.Printf("[handleVectorDocDeletion] Failed to delete file entry: %v", err)
+		status = "error"
+		errorMsg = fmt.Sprintf("db delete failed: %v", err)
+	} else {
+		log.Printf("[handleVectorDocDeletion] File entry deleted for fileId=%s", task.FileID)
+	}
+
+	// Step 5: Publish status to Kafka
+	publishStatus(h, "deletion_status", task, fileEntry, status, errorMsg)
+
+	return nil
+}
+
+// helper
+func publishStatus(
+	h *vectorTaskConsumerHandler,
+	status_type string,
+	task VectorizationTask,
+	fileEntry apimodels.Upload,
+	status, errorMsg string,
+) {
+	fileStatus := types.OutgoingFileStatus{
+		Type:     status_type,
+		FileId:   task.FileID,
+		FileName: fileEntry.FileName,
+		Status:   status,
+		Error:    errorMsg,
+	}
+
+	data, err := json.Marshal(fileStatus)
+	if err != nil {
+		log.Printf("[publishStatus] Failed to marshal OutgoingFileStatus: %v", err)
 		return
 	}
 
-	deleteFilter := bson.M{"_id": objID}
-
-	_, err = collection.DeleteOne(context.TODO(), deleteFilter)
-	if err != nil {
-		log.Printf("[handleVectorDocDeletion (Consumer)] Failed to delete file entry from DB: %v", err)
+	key := task.UserID + "_" + task.ChatID
+	if err := h.publisher.SendMessage("server_reply", key, data); err != nil {
+		log.Printf("[publishStatus] Kafka publish failed for fileId=%s: %v", task.FileID, err)
 	} else {
-		log.Printf("[handleVectorDocDeletion (Consumer)] File entry deleted from DB for fileId=%s", task.FileID)
+		log.Printf("[publishStatus] Kafka published succeded for file=%s", task.FileID)
 	}
 }

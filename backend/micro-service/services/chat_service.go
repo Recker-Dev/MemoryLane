@@ -66,7 +66,7 @@ func Debug(userId string) ([]models.Chat, error) {
 
 }
 
-func CreateChat(userId, chatId, name string) error {
+func CreateChat(userId, chatName string) (string, error) {
 	chatCollection := config.GetCollection(
 		os.Getenv("CHAT_COLLECTION"),
 	)
@@ -75,21 +75,24 @@ func CreateChat(userId, chatId, name string) error {
 	defer cancel()
 
 	// Check if userId, chatId chat exists
-	if err := chatCollection.FindOne(ctx, bson.M{"userId": userId, "chatId": chatId}).Err(); err == nil {
-		return errors.New("chat already exist")
-	}
+
+	chatId := primitive.NewObjectID().Hex()
 
 	chat := models.Chat{
 		UserId:    userId,
 		ChatId:    chatId,
-		Name:      name,
+		Name:      chatName,
 		Messages:  []models.Message{},
 		Memory:    []models.Memory{},
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
 	}
 
 	_, err := chatCollection.InsertOne(ctx, chat)
-	return err
+	if err != nil {
+		return "", err
+	}
+
+	return chatId, nil
 }
 
 func DeleteChat(userId, chatId string) error {
@@ -180,7 +183,7 @@ func GetChatHeads(userId string) ([]models.ChatHeads, error) {
 
 }
 
-func GetChatMessages(userId, chatId string) ([]models.Message, error) {
+func GetChatMessages(userId, chatId string) (*models.ChatMessages, error) {
 	chatCollection := config.GetCollection(
 		os.Getenv("CHAT_COLLECTION"),
 	)
@@ -207,14 +210,24 @@ func GetChatMessages(userId, chatId string) ([]models.Message, error) {
 		return nil, err
 	}
 
-	if len(chat.Messages) == 0 {
-		return []models.Message{}, nil
+	// Normalize messages
+	msgMap := make(map[string]models.Message, len(chat.Messages))
+	order := make([]string, 0, len(chat.Messages))
+
+	for _, m := range chat.Messages {
+		msgMap[m.MsgID] = m
+		order = append(order, m.MsgID)
 	}
 
-	return chat.Messages, nil
+	return &models.ChatMessages{
+		UserId:   userId,
+		ChatId:   chatId,
+		Messages: msgMap,
+		Order:    order,
+	}, nil
 }
 
-func AddMemory(userId, chatId, memoryContext string) error {
+func AddMemory(userId, chatId, memoryContext string) (string, error) {
 	chatCollection := config.GetCollection(
 		os.Getenv("CHAT_COLLECTION"),
 	)
@@ -222,9 +235,13 @@ func AddMemory(userId, chatId, memoryContext string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	newMemory := bson.M{
-		"memid":   primitive.NewObjectID().Hex(),
-		"context": memoryContext,
+	newMemId := primitive.NewObjectID().Hex()
+
+	newMemory := models.Memory{
+		Memid:     newMemId,
+		Context:   memoryContext,
+		Persist:   false,
+		CreatedAt: time.Now().UTC(),
 	}
 
 	filter := bson.M{
@@ -240,14 +257,14 @@ func AddMemory(userId, chatId, memoryContext string) error {
 
 	result, err := chatCollection.UpdateOne(ctx, filter, update)
 	if err != nil {
-		return fmt.Errorf("failed to add memory: %w", err)
+		return "", fmt.Errorf("failed to add memory: %w", err)
 	}
 
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("chat not found for userId=%s chatId=%s", userId, chatId)
+		return "", fmt.Errorf("chat not found for userId=%s chatId=%s", userId, chatId)
 	}
 
-	return nil
+	return newMemId, nil
 }
 
 func GetChatMemories(userId, chatId string) ([]models.Memory, error) {
@@ -312,6 +329,38 @@ func DeleteMemory(userId, chatId, memId string) error {
 	}
 	if result.ModifiedCount == 0 {
 		return errors.New("no memory with given memId found")
+	}
+
+	return nil
+}
+
+func SetMemoryPersistence(userId, chatId, memId string, setVal bool) error {
+	chatCollection := config.GetCollection(
+		os.Getenv("CHAT_COLLECTION"),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"userId": userId,
+		"chatId":       chatId,
+		"memory.memid": memId}
+
+	update := bson.M{
+		"$set": bson.M{"memory.$.persist": setVal}, //$ matches only 1st elem and $[] matches all in array
+	}
+
+	res, err := chatCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("memory not found")
+	}
+
+	if res.ModifiedCount == 0 {
+		// found but already in desired state
+		return nil
 	}
 
 	return nil

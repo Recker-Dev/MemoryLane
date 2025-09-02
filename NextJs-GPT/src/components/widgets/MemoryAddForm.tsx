@@ -24,10 +24,7 @@ export const MemoryAddForm: React.FC<MemoryAddFormProps> = ({
     onClose,
 
 }) => {
-    // Global States
-    const isUserSynced = useUserStateStore((state) => state.isUserSynced);
-    const userId = useUserStateStore((state) => state.userId);
-    const activeChatId = useUserStateStore((state) => state.activeChatId);
+
 
 
     // Component States
@@ -47,13 +44,16 @@ export const MemoryAddForm: React.FC<MemoryAddFormProps> = ({
 
     // Handle the "Add" button click
     const handleAddClick = useCallback(async () => {
+        // Global States
+        const isUserSynced = useUserStateStore.getState().isUserSynced;
+        const userId = useUserStateStore.getState().userId;
+        const activeChatId = useUserStateStore.getState().activeChatId;
+
         if (!isUserSynced || !userId || !activeChatId || !memoryContext) return;
 
         setIsAdding(true);
 
         const result = await addChatMemory({
-            userId,
-            activeChatId,
             memoryContext,
             tags,
         });
@@ -68,7 +68,7 @@ export const MemoryAddForm: React.FC<MemoryAddFormProps> = ({
         } else {
             toast.error(result.error || "Failed to add memory.");
         }
-    }, [userId, activeChatId, memoryContext, tags, addChatMemory, onClose]);
+    }, [memoryContext, tags, addChatMemory, onClose]);
 
 
     useEffect(() => {

@@ -47,22 +47,25 @@ func (consumerHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil
 
 func (h *consumerHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		key := string(msg.Key)
+		key := string(msg.Key) // Key is in userId_chatId format
 
-		// log.Printf("Consumed reply for %s", key)
-
-		parts := strings.SplitN(key, "_", 3)
-		if len(parts) != 3 {
+		// split key: userId_chatId
+		parts := strings.SplitN(key, "_", 2)
+		if len(parts) != 2 {
+			log.Printf("⚠️ Invalid key format: %s", key)
 			sess.MarkMessage(msg, "")
-			log.Print("Mismatch in key length of published topic and streaming back to user coroutine")
 			continue
 		}
 		userId, chatId := parts[0], parts[1]
 
+		// no need to unmarshal for routing unless you want validation
 		client := h.hub.GetClient(userId, chatId)
 		if client != nil {
-			client.SendToWritePump(msg.Value)
+			client.SendToWritePump(msg.Value) // forward raw payload
+		} else {
+			log.Printf("⚠️ No client found for user=%s chat=%s", userId, chatId)
 		}
+
 		sess.MarkMessage(msg, "")
 	}
 	return nil

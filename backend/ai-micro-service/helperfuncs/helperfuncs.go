@@ -71,11 +71,11 @@ func TriggerVectorSearch(userId, chatId, query string, fileIds []string) (string
 	// TriggerVectorSearch performs a vector search using the provided userId, chatId, query, and fileIds.
 	// It constructs a VectorQueryRequest, calls the vector DB service, and returns a formatted result string or error.
 	req := vectordbservices.VectorQueryRequest{
-		UserId:     userId,
-		ChatId:     chatId,
-		TopK:       3,
-		QueryTexts: []string{query},
-		FileIds:    fileIds,
+		UserId:    userId,
+		ChatId:    chatId,
+		TopK:      3,
+		QueryText: query,
+		FileIds:   fileIds,
 	}
 
 	results, err := vectordbservices.VectorQueryService(req)

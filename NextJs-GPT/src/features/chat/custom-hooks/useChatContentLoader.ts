@@ -1,26 +1,14 @@
-import { useEffect } from "react";
+import { act, useEffect } from "react";
 import toast from "react-hot-toast";
-import { fetchMessages, getMemories } from "@/lib/chatServices";
+import { fetchChatHistoryApiHelper, getMemoriesApiHelper, getChatFilesApiHelper } from "@/lib/chatServices";
 import { useRouter } from "next/navigation";
 
 import { useUserStateStore } from "@/lib/stores/useUserStateStore";
 import { useChatStore } from "@/lib/stores/useChatStore";
 import { useMemoryStore } from "@/lib/stores/useMemoryStore";
+import { useFileStore } from "@/lib/stores/useFileStore";
+import { useChatWebSocketStore } from "@/lib/stores/useChatWebSocketStore";
 
-/**
- * Custom hook that fetches chat messages and memory data
- * whenever the `activeChatId` or `userId` changes.
- *
- * - Triggers loading state
- * - Populates Zustand chat store with message history
- * - Sets current chat memory into state
- * - Handles failure cases with toast notifications and route fallback
- *
- * @param userId - Currently active user ID
- * @param activeChatId - Currently selected chat ID
- * @param setMemories - Setter function to update current chat memories
- * @param setIsLoadingMessages - Setter function to manage loading animation
- */
 
 export function useChatContentLoader(args: {
     setIsLoadingMessages: (value: React.SetStateAction<boolean>) => void;
@@ -35,67 +23,109 @@ export function useChatContentLoader(args: {
     const isUserSynced = useUserStateStore((state) => state.isUserSynced);
     const activeChatId = useUserStateStore((state) => state.activeChatId);
 
-    const setAllChatMessages = useChatStore((state) => state.setAllChatMessages);
-    
-    const setMemories = useMemoryStore((state) => state.setChatMemories);
-    const resetSelectedMemories = useMemoryStore((state) => state.resetSelectedMemories);
+    const setChatMessagesFromBackend = useChatStore((s) => s.setChatMessagesFromBackend);
+    // const removeChatHistoryByChatId = useChatStore((s) => s.removeChatHistoryByChatId);
+
+    const setChatMemories = useMemoryStore((s) => s.setChatMemories);
+    const resetSelectedMemories = useMemoryStore((s) => s.resetSelectedMemories);
+
+    const setChatFiles = useFileStore((s) => s.setChatFiles);
+
+    // Check if valid ws open signal present (1) or fallback to closed (3)
+    const readyState = useChatWebSocketStore((s) => {
+        const ws = s.wsMap.get(activeChatId!);
+        return ws ? ws.readyState : WebSocket.CLOSED;
+    });
 
 
 
     useEffect(() => {
-        if (!isUserSynced) return;
-        if (!activeChatId || !userId) return;
+        if (!isUserSynced || !activeChatId || !userId) return;
 
         // Wipe out any previously selected memory context from other chatId.
         resetSelectedMemories();
 
+        // Skip fetching if a valid ws open signal found (1)
         // --- messages fetch ---
-        const fetchChatMessages = async () => {
-            setIsLoadingMessages(true);
-            try {
-                const response = await fetchMessages(userId, activeChatId);
-                if (response.success && Array.isArray(response.message)) {
-                    setAllChatMessages(activeChatId, response.message);
-                } else {
-                    toast.error("Error fetching chat-history.");
+        if (readyState !== WebSocket.OPEN) {
+            (async () => {
+                setIsLoadingMessages(true);
+                try {
+                    const response = await fetchChatHistoryApiHelper(userId, activeChatId);
+                    if (response.success) {
+                        // removeChatHistoryByChatId(activeChatId); // Makes no sense cuz its an over-write anyways
+                        setChatMessagesFromBackend(response.data);
+                    } else {
+                        toast.error("Error fetching chat-history.");
+                        router.push(`/chat/${userId}`);
+                    }
+                } catch (err) {
+                    toast.error("Unexpected error fetching chat history.");
                     router.push(`/chat/${userId}`);
+                } finally {
+                    setTimeout(() => {
+                        setIsLoadingMessages(false);
+                    }, 500);
                 }
-            } catch (err) {
-                toast.error("Unexpected error fetching chat history.");
-                router.push(`/chat/${userId}`);
-            } finally {
-                setTimeout(() => {
-                    setIsLoadingMessages(false);
-                }, 500);
-            }
-        };
+            })();
+        }
 
-        fetchChatMessages();
 
         // --- memories fetch ---
-        const fetchChatMemories = async () => {
+        (async () => {
             try {
-                const response = await getMemories(userId, activeChatId);
-                if (response.success && Array.isArray(response.message)) {
-                    console.log(response.message);
-                    setMemories(response.message);
+                const response = await getMemoriesApiHelper(userId, activeChatId);
+                if (response.success && Array.isArray(response.data)) {
+                    setChatMemories(
+                        response.data.map((m: any) => ({
+                            ...m,
+                            createdAt: new Date(m.createdAt), // convert from string to Date
+                        }))
+                    );
                 } else {
                     toast.error("Error fetching chat memories.");
                 }
             } catch (err) {
                 toast.error("Unexpected error fetching chat memories.");
             }
-        };
+        })();
 
-        fetchChatMemories();
+
+        // files fetch
+        (async () => {
+            try {
+                const fetchResponse = await getChatFilesApiHelper(userId, activeChatId);
+                if (
+                    fetchResponse.success &&
+                    Array.isArray(fetchResponse.data)
+                ) {
+
+                    setChatFiles(
+                        fetchResponse.data.map((m: any) => ({
+                            ...m,
+                            createdAt: new Date(m.createdAt),
+                        }))
+                    );
+                } else {
+                    toast.error("Error fetching chat files.");
+                }
+            } catch (err) {
+                toast.error("Unexpected error fetching chat files.");
+            }
+
+        })();
+
+
 
     }, [
         isUserSynced,
         activeChatId,
         userId,
-        setAllChatMessages,
+        setChatMessagesFromBackend,
         setIsLoadingMessages,
         router,
-        setMemories,
+        setChatMemories,
+        setChatFiles,
+        readyState,
     ]);
 }

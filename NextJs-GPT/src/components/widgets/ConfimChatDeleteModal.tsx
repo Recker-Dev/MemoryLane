@@ -10,7 +10,7 @@ import { useUserStateStore } from "@/lib/stores/useUserStateStore";
 
 type ConfirmChatDeleteModalProps = {
   isOpen: boolean;
-  chatIdToDelete: string | null;
+  chatIdToDelete: string| null;
   onClose: () => void;
 };
 
@@ -37,10 +37,15 @@ export const ConfirmChatDeleteModal: React.FC<ConfirmChatDeleteModalProps> = ({
 
   const handleDeleteChatHead = useCallback(async () => {
 
+    if(!chatIdToDelete ||!isUserSynced || !userId || !isUserSynced){
+      console.log("Dependencies for chatDelete missing");
+      return;
+    }
+
     const response = await deleteChatHead(isUserSynced, userId, chatIdToDelete, activeChatId);
 
-    if (response?.success) {
-      removeChatHead(response.chatId);
+    if (response.success) {
+      removeChatHead(chatIdToDelete);
       toast.success('Chat deleted successfully.');
       if (chatIdToDelete === activeChatId) {
         setActiveChatId(null);
@@ -73,7 +78,7 @@ export const ConfirmChatDeleteModal: React.FC<ConfirmChatDeleteModalProps> = ({
         }
       }
     };
-    
+
 
     if (isOpen) {
       window.addEventListener("keydown", handleKeyDown);

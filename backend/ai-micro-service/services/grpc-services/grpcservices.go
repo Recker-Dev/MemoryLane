@@ -94,11 +94,11 @@ func SendFileToPythonVectorizer(upload apimodels.Upload) error {
 	}
 
 	if !response.Success {
-		return fmt.Errorf("vectorization failed: %s", response.Message)
+		return fmt.Errorf("%s", response.Message)
 	}
 
 	if response.ChunkCount == 0 {
-		return fmt.Errorf("vectorization pdf had no parseable documents to vectorize. Skipping Vectorization")
+		return fmt.Errorf("file had no parseable documents to vectorize; Skipped Vectorization")
 	}
 
 	return nil

@@ -2,10 +2,12 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/config"
 	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/controllers"
 	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/kafka"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -28,6 +30,16 @@ func main() {
 
 	r := gin.Default()
 
+	// Configure CORS
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3100"}, // your frontend
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
 	// Auth Services
 	r.POST("/registerUser", controllers.RegisterUser)
 	r.POST("/validateUser", controllers.ValidateUser)
@@ -44,10 +56,13 @@ func main() {
 	r.POST("/addMemory/:userId/:chatId", controllers.AddChatMemory)
 	r.GET("/memories/:userId/:chatId", controllers.GetChatMemories)
 	r.DELETE("/deleteMemory/:userId/:chatId/:memId", controllers.DeleteChatMemory)
+	r.POST("/setMemoryPersist/:userId/:chatId/:memId", controllers.SetPersistanceChatMemory)
 
 	// File upload and deletion Routes
-	r.POST("/uploadFiles/:userId/:chatId", controllers.UploadFiles)
-	r.DELETE("/deleteFiles/:userId/:chatId", controllers.DeleteFiles)
+	r.GET("/getFilesData/:userId/:chatId", controllers.GetFiles)
+	r.POST("/uploadFiles/:userId/:chatId", controllers.UploadChatFiles)
+	r.DELETE("/deleteFiles/:userId/:chatId", controllers.DeleteChatFiles)
+	r.POST("/setFilePersist/:userId/:chatId/:fileId", controllers.SetPersistanceChatFile)
 
 	r.Run(":8080")
 

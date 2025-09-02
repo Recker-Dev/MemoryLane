@@ -2,7 +2,7 @@
 
 import Header from '@/components/Header'; // Import the Header
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useParams, notFound } from 'next/navigation';
 
@@ -15,7 +15,8 @@ import ChatInput from '@/components/widgets/ChatInput';
 import Sidebar from '@/components/widgets/Sidebar';
 import { CreateNewChatModal } from '@/components/widgets/CreateNewChatModal';
 import { MemoryAddForm } from '@/components/widgets/MemoryAddForm';
-import { FileUploadForm } from '@/components/widgets/FileUploadForm';
+import { FileUploadForm } from '@/components/widgets/FileAddForm';
+import { ConnectionStatus } from '@/components/widgets/ConnectionStatus';
 
 import { useChatStore } from '@/lib/stores/useChatStore';
 import { useUserStateStore } from '@/lib/stores/useUserStateStore';
@@ -25,6 +26,9 @@ import { useSyncActiveChatId } from '@/features/chat/custom-hooks/useSyncActiveC
 import { useFetchChatHeads } from '@/features/chat/custom-hooks/useFetchChatHeads';
 import { useChatContentLoader } from '@/features/chat/custom-hooks/useChatContentLoader';
 
+import { useChatWebSocketStore } from '@/lib/stores/useChatWebSocketStore';
+
+import { createChatWebSocket } from '@/lib/chatServices';
 
 // This component provides the basic UI framework for a chat screen,
 // now with a full-width background, a wider and centered inner content area,
@@ -41,10 +45,10 @@ export default function ChatPage() {
   ///////// GLOBAL state ///////////
 
   // Zustand User State Store Values
+  const userId = useUserStateStore((state) => state.userId);
+  const isUserSynced = useUserStateStore((state) => state.isUserSynced);
   const activeChatId = useUserStateStore((state) => state.activeChatId);
 
-  // Zustand Chat State Store Values
-  const allChats = useChatStore((state) => state.allChats);
 
 
 
@@ -52,9 +56,10 @@ export default function ChatPage() {
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showAddMemoryModal, setAddMemoryModal] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false); // Set to true to make it visible by default
-  
+
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [isProcessingInput, setIsProcessingInput] = useState(false);
+
+
 
 
 
@@ -86,10 +91,37 @@ export default function ChatPage() {
     setIsLoadingMessages,
   });
 
+  // useEffect(() => {
+  //   const prevChatIdRef = { current: null as string | null };
 
-  const currentMessages = [
-    ...(allChats[activeChatId || ''] || []),
-  ];
+  //   if (userId && activeChatId && isUserSynced) {
+  //     useChatWebSocketStore.getState().connect(userId, activeChatId);
+  //   }
+
+  //   return () => {
+  //     const prevChatId = prevChatIdRef.current;
+  //     if (prevChatId && prevChatId !== activeChatId) {
+  //       console.log("🧹 disconnecting old chat", prevChatId);
+  //       useChatWebSocketStore.getState().disconnect(prevChatId);
+  //     }
+  //     prevChatIdRef.current = activeChatId;
+  //   };
+  // }, [userId, activeChatId, isUserSynced]);
+
+  // console.log(useChatWebSocketStore.getState().queue)
+
+  useEffect(() => {
+    if (userId && activeChatId && isUserSynced) {
+      // Connect without closing old ones
+      useChatWebSocketStore.getState().connect(userId, activeChatId);
+    }
+
+    return () => {
+      // Optionally disconnect a chat when unmounting
+      // useChatWebSocketStore.getState().disconnect(activeChatId);
+    };
+  }, [userId, activeChatId, isUserSynced]);
+
 
 
 
@@ -126,24 +158,22 @@ export default function ChatPage() {
 
           {activeChatId && !isLoadingMessages ? (
             <>
-              <div className="flex flex-row gap-4 p-4">
-                {/* Wrap ChatMemoriesDropdown in a relative div */}
-                <div className="relative">
-                  <ChatMemoriesDropdown />
+              <div className="flex flex-row items-center justify-between p-4">
+                <div className="flex flex-row gap-4">
+                  {/* Wrap ChatMemoriesDropdown in a relative div */}
+                  <div className="relative">
+                    <ChatMemoriesDropdown />
+                  </div>
+                  {/* Wrap ChatFilesDropdown in a relative div */}
+                  <div className="relative">
+                    <ChatFilesDropdown />
+                  </div>
                 </div>
-                {/* Wrap ChatFilesDropdown in a relative div */}
-                <div className="relative">
-                  <ChatFilesDropdown />
-                </div>
+                <ConnectionStatus />
               </div>
               <div className="flex flex-col w-full max-w-5xl mx-auto flex-grow min-h-0 z-10">
-                <ChatWindow
-                  messages={currentMessages}
-                  isProcessingInput={isProcessingInput}
-                />
+                <ChatWindow />
                 <ChatInput
-                  isProcessingInput={isProcessingInput}
-                  setIsProcessingInput={setIsProcessingInput}
                   setAddMemoryModal={setAddMemoryModal}
                   setShowUploadForm={setShowUploadForm}
                 />

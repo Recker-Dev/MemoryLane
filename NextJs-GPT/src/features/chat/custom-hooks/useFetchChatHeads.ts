@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { fetchChatHeads } from "@/lib/chatServices";
+import { fetchChatHeadsApiHelper } from "@/lib/chatServices";
 import { toast } from "react-hot-toast";
 
 import { useUserStateStore } from "@/lib/stores/useUserStateStore";
@@ -28,14 +28,23 @@ export function useFetchChatHeads() {
 
         hasFetched.current = true; // Once set true, effect won't run api call again.
 
-        fetchChatHeads(userId).then(response => {
-            if (response.success) {
-                if (Array.isArray(response.message)) {
-                    setChatHeads(response.message);
+        (async () => {
+            try {
+                const response = await fetchChatHeadsApiHelper(userId);
+
+                if (response.success) {
+                    if (Array.isArray(response.data)) {
+                        setChatHeads(response.data);
+                    }
+                } else {
+                    if (response.error !== "user not found") {
+                        toast.error("Error fetching chat-heads!");
+                    }
                 }
-            } else {
-                toast.error("Error Fetching chats-heads!");
+            } catch (err) {
+                console.error("Unexpected error fetching chat-heads:", err);
+                toast.error("Unexpected error fetching chat-heads!");
             }
-        });
+        })();
     }, [isUserSynced, userId, chatHeads, setChatHeads]);
 }

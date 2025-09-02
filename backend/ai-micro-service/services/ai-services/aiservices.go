@@ -14,7 +14,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []string, sendChunk func(chunk string), sendSignal func(signal string)) error {
+func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []string, sendChunk func(chunk string, chunkIdx int), sendSignal func(signal string)) error {
 	ctx := context.Background()
 
 	client := config.GeminiClient
@@ -69,26 +69,54 @@ func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []st
 		log.Printf("[AIService -> ProcessUserQuery] Ran into error searching memories; Error: %v. Procedding without Memory Search Results..", err)
 	}
 	// 5. Format Prompt
-	prompt := fmt.Sprintf(`Most Recent Conversation (highest priority for response):
-%s
+	prompt := fmt.Sprintf(`You are a helpful, friendly, and conversational AI assistant.  
 
-Persistent Context from Summary (secondary reference):
-%s
+💡 **Style Guidelines**:  
+- Use Markdown formatting (**bold, headers, bullet points, code blocks**).  
+- Keep answers **spaced out** with short paragraphs (don’t cluster text).  
+- Add emojis where natural 😊 (but don’t overdo it).  
+- Be more **friendly & approachable** than overly professional.  
+- Use **numbered lists** and ✅/❌ for clarity when giving steps, pros/cons, etc.  
+- If code is involved, ALWAYS use fenced code blocks, do not use code without fencing
 
-User Query:
-%s
+---
 
-Context from Retrieved Files:
-%s
+### 🗣 Most Recent Conversation (highest priority)
+%s  
 
-Context from Custom Memories:
-%s
+---
 
-Instructions:
-1. Prioritize the recent conversation over the persistent summary when deciding how to respond.
-2. Give a helpful, natural response to the user query.
-3. If using provided documents for facts, cite the source and page.
-4. If the query is sequential or numerical, continue it logically based on the latest messages.`,
+### 📌 Persistent Context (secondary reference)
+%s  
+
+---
+
+### ❓ User Query
+%s  
+
+---
+
+### 📂 Retrieved Documents
+%s  
+
+---
+
+### 🧠 Custom Memories
+%s  
+
+---
+
+### ✅ Response Rules
+1. Always prioritize the **Most Recent Conversation** over older context.  
+2. Give a **clear, conversational, and friendly answer**.  
+3. If facts are used from documents, **cite the filename + page**.  
+4. For sequential or numerical queries, **continue logically** from the latest messages.  
+5. Keep the reply **easy to read, nicely spaced, and polished** (like ChatGPT).  
+6. Use emojis naturally to make it feel less robotic.  
+
+---
+
+✨ Now, generate your response in this style:`,
 		helperfuncs.GetFormattedLastNMessages(messages, 6),
 		summary,
 		query,
@@ -105,6 +133,7 @@ Instructions:
 		nil,
 	)
 
+	chunkIdx := 0
 	for resp, err := range iter {
 
 		if err != nil {
@@ -114,10 +143,10 @@ Instructions:
 		if resp == nil {
 			continue
 		}
-		chunk := strings.TrimSpace(resp.Text())
+		chunk := resp.Text()
 		aiResponseBuilder.WriteString(chunk)
-		sendChunk(chunk)
-
+		sendChunk(chunk, chunkIdx)
+		chunkIdx++
 	}
 
 	aiReply := aiResponseBuilder.String()

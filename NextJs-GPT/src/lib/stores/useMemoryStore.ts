@@ -3,54 +3,61 @@ import { create } from 'zustand';
 
 export type MemoryStore = {
 
-    chatMemories: Memory[],
-    setChatMemories: (memories: Memory[]) => void,
-    removeMemoryById: (id: string) => void,
-    reset: () => void
+  chatMemories: Memory[],
+  setChatMemories: (memories: Memory[]) => void,
+  addChatMemory: (memory: Memory) => void,
+  removeMemoryById: (id: string) => void,
+  resetChatMemories: () => void
 
 
-    selectedMemories: Memory[],
-    appendToSelectedMemories: (memory: Memory) => void,
-    removeFromSelectedMemories: (memory: Memory) => void,
-    resetSelectedMemories: () => void
+  selectedMemories: Memory[],
+  appendToSelectedMemories: (memory: Memory) => void,
+  removeFromSelectedMemoriesById: (id: string) => void,
+  resetSelectedMemories: () => void
 }
 
 export const useMemoryStore = create<MemoryStore>((set) => ({
 
+  chatMemories: [],
+
+  setChatMemories: (memories) => set(({
+    chatMemories: memories
+  })),
+
+  addChatMemory: (memory) => set((state) => {
+    const updated = [...state.chatMemories, memory];
+    updated.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    return { chatMemories: updated };
+  }),
+
+  removeMemoryById: (id) => set((state) => ({
+    chatMemories: state.chatMemories.filter((memory) => memory.memid !== id)
+  })),
+
+  resetChatMemories: () => set({
     chatMemories: [],
-
-    setChatMemories: (memories) => set(({
-        chatMemories: memories
-    })),
-
-    removeMemoryById: (id) => set((state) => ({
-        chatMemories: state.chatMemories.filter((memory) => memory.mem_id !== id)
-    })),
-
-    reset: () => set({
-        chatMemories: [],
-    }),
+  }),
 
 
 
-    selectedMemories: [],
+  selectedMemories: [],
 
-    appendToSelectedMemories: (memory) => set((state) => {
-        if (state.selectedMemories.some((mem) => mem.mem_id === memory.mem_id)) {
-            return state;
-        }
-        return { selectedMemories: [...state.selectedMemories, memory] }
-    }),
+  appendToSelectedMemories: (memory) => set((state) => {
+    if (state.selectedMemories.some((mem) => mem.memid === memory.memid)) {
+      return state;
+    }
+    return { selectedMemories: [...state.selectedMemories, memory] }
+  }),
 
-    removeFromSelectedMemories: (memory) => set((state) => {
-        return { // Or use {return {}}
-            selectedMemories: state.selectedMemories.filter((mem) => mem.mem_id !== memory.mem_id)
-        }
-    }),
+  removeFromSelectedMemoriesById: (id) => set((state) => {
+    return { // Or use {return {}}
+      selectedMemories: state.selectedMemories.filter((mem) => mem.memid !== id)
+    }
+  }),
 
-    resetSelectedMemories: () => set({
-        selectedMemories: []
-    })
+  resetSelectedMemories: () => set({
+    selectedMemories: []
+  })
 
 
 }));

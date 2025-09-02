@@ -1,52 +1,50 @@
 // lib/hooks/useAddChatMemory.ts
-import { useCallback } from "react";
-import { v4 as uuid } from "uuid";
-import { addMemory, getMemories } from "@/lib/chatServices";
-import { Memory } from "@/components/widgets/ChatMemoriesDropdown";
+import { act, useCallback } from "react";
+import { addChatMemoryApiHelper, getMemoriesApiHelper } from "@/lib/chatServices";
 import { useMemoryStore } from "@/lib/stores/useMemoryStore";
+import { useUserStateStore } from "@/lib/stores/useUserStateStore";
 
 export type AddChatMemoryArgs = {
-  userId: string;
-  activeChatId: string;
   memoryContext: string;
   tags: string;
 };
 
 
 export function useAddChatMemory() {
-  
+
   // Global State
+  
+
   const setMemories = useMemoryStore((state) => state.setChatMemories);
 
   return useCallback(
     async ({
-      userId,
-      activeChatId,
       memoryContext,
       tags,
-    }: AddChatMemoryArgs): Promise<{success:boolean, error?:string}> => {
-      const tagsArray = tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0);
+    }: AddChatMemoryArgs): Promise<{ success: boolean, error?: string }> => {
 
-      const chatMem: Memory = {
-        mem_id: uuid(),
-        context: memoryContext,
-        tags: tagsArray,
-      };
+      const isUserSynced = useUserStateStore.getState().isUserSynced;
+      const userId = useUserStateStore.getState().userId;
+      const activeChatId = useUserStateStore.getState().activeChatId;
 
-      const addResponse = await addMemory(userId, activeChatId, chatMem);
+      if (!userId || !activeChatId || !isUserSynced) return { success: false, error: "userId and chatId is needed!" }
+
+      const addResponse = await addChatMemoryApiHelper(userId, activeChatId, memoryContext);
       if (!addResponse.success) {
-        return { success: false, error: addResponse.message };
+        return { success: false, error: addResponse.error };
       }
 
-      const fetchResponse = await getMemories(userId, activeChatId);
+      const fetchResponse = await getMemoriesApiHelper(userId, activeChatId);
       if (
         fetchResponse.success &&
-        Array.isArray(fetchResponse.message)
+        Array.isArray(fetchResponse.data)
       ) {
-        setMemories(fetchResponse.message);
+        setMemories(
+          fetchResponse.data.map((m: any) => ({
+            ...m,
+            createdAt: new Date(m.createdAt),
+          }))
+        );
         return { success: true };
       } else {
         return { success: false, error: "Error fetching updated memories." };

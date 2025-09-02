@@ -36,8 +36,10 @@ export default function SignUpPage() {
         return;
       }
 
-      toast.success('Registration successful! Please log in.');
-      router.push('/');
+      const userData = await response.json();
+      toast.success(userData.message);
+      // console.log("User ID:", userData.userId);
+      router.push(`/chat/${userData.userId}`);
     } catch (error) {
       console.error(error);
       toast.error("Something went wrong.");
@@ -72,7 +74,8 @@ export default function SignUpPage() {
       }
 
       const userData = await response.json();
-      console.log("User ID:", userData.userId);
+      toast.success(userData.message || "Logged in.");
+      // console.log("User ID:", userData.userId);
       router.push(`/chat/${userData.userId}`);
     } catch (err) {
       console.error(err);

@@ -15,6 +15,8 @@ import (
 	models "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // For File Upload Result
@@ -30,6 +32,13 @@ type UploadSummary struct {
 	Successful        []FileUploadInfo
 	SuccessfulFileIds []primitive.ObjectID
 	Failed            []FileUploadInfo
+}
+
+type FileResponse struct {
+	FileId    string    `json:"fileId"`
+	FileName  string    `json:"fileName"`
+	CreatedAt time.Time `json:"createdAt"`
+	Persist   bool      `json:"persist"`
 }
 
 func HandleFileUpload(userId, chatId string, fileHeaderArr []*multipart.FileHeader) UploadSummary {
@@ -66,16 +75,6 @@ func HandleFileUpload(userId, chatId string, fileHeaderArr []*multipart.FileHead
 				return
 			}
 			defer file.Close()
-
-			// // Determine type
-			// contentType := fh.Header.Get("Content-Type")
-
-			// var folder string
-			// if strings.HasPrefix(contentType, "image/") {
-			// 	folder = "images"
-			// } else {
-			// 	folder = "files"
-			// }
 
 			// Bruteforce detect file type from extension
 			ext := strings.ToLower(filepath.Ext(fh.Filename))
@@ -125,6 +124,9 @@ func HandleFileUpload(userId, chatId string, fileHeaderArr []*multipart.FileHead
 				FileType:          contentType,
 				CreatedAt:         time.Now(),
 				IsVectorDBCreated: false,
+				Status:            "processing",
+				Error:             "",
+				Persist:           false,
 			}
 
 			// Insert in DB and get the ObjectId; needed for filepath
@@ -289,4 +291,87 @@ func HandleFilesDelete(uploads []models.Upload) {
 
 	}
 
+}
+
+func HandleFilesGet(userId, chatId string) ([]FileResponse, error) {
+	fileCollection := config.GetCollection(
+		os.Getenv("FILE_COLLECTION"),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	projection := bson.M{
+		"path": 0,
+	}
+
+	opts := options.Find().SetProjection(projection).SetSort(bson.D{{Key: "createdAt", Value: -1}}) //sets project and sorts latest upload first
+
+	cursor, err := fileCollection.Find(ctx, bson.M{"userId": userId, "chatId": chatId}, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	defer cursor.Close(ctx)
+
+	var response []FileResponse
+
+	for cursor.Next(ctx) {
+		var file models.Upload
+		err := cursor.Decode(&file)
+		if err != nil {
+			return nil, err
+		}
+		response = append(response, FileResponse{FileId: file.ID.Hex(),
+			FileName:  file.FileName,
+			CreatedAt: file.CreatedAt,
+			Persist:   file.Persist})
+	}
+
+	if len(response) == 0 {
+		return []FileResponse{}, nil
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return response, nil
+
+}
+
+func SetFilePersistence(userId, chatId, fileId string, setVal bool) error {
+	fileCollection := config.GetCollection(
+		os.Getenv("FILE_COLLECTION"),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Convert string -> ObjectID
+	objID, err := primitive.ObjectIDFromHex(fileId)
+	if err != nil {
+		return err // invalid fileId, exit early
+	}
+
+	// Build filter
+	filter := bson.M{
+		"_id":    objID,
+		"userId": userId,
+		"chatId": chatId,
+	}
+
+	update := bson.M{
+		"$set": bson.M{"persist": setVal},
+	}
+
+	res, err := fileCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount == 0 {
+		return mongo.ErrNoDocuments // nothing matched
+	}
+
+	return nil
 }

@@ -1,95 +1,122 @@
-import { create } from 'zustand'
-import { type ChatHead } from '@/components/widgets/Sidebar'
-import { type MessageBubbleProps } from '@/components/ui/MessageBubble';
+import { create } from "zustand";
+import { ChatHead } from "@/components/widgets/Sidebar";
+import { useUserStateStore } from "./useUserStateStore";
+
+export type ChatMessage = { // Type for frontend
+    msgId: string,
+    role: string,
+    content: string,
+    timestamp: number,
+};
+
+type ChatHistory = {
+    messages: Record<string, ChatMessage>; // type from backend
+    order: string[];
+    userId: string;
+    chatId: string;
+};
+
 
 export type ChatStore = {
-
     chatHeads: ChatHead[];
     setChatHeads: (heads: ChatHead[]) => void;
     addChatHead: (head: ChatHead) => void;
-    
     removeChatHead: (id: string) => void;
 
-    allChats: Record<string, MessageBubbleProps[]>;
+    chatHistory: Record<string, ChatHistory>;
 
-    setAllChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // New: to replace history
-    appendChatMessages: (chatId: string, messages: MessageBubbleProps[]) => void; // Renamed: to append new messages
+    setChatMessagesFromBackend: (backend: ChatHistory) => void;
+    appendChatMessage: (message: ChatMessage, chatId: string) => void;
+    updateChatMessage: (chatId: string, msgId: string, content: string) => void;
+    removeChatHistoryByChatId: (chatId: string) => void;
 
     reset: () => void;
-}
+};
 
 export const useChatStore = create<ChatStore>((set) => ({
-
-
     chatHeads: [],
-
-    setChatHeads: (heads) => set(() => ({ chatHeads: heads })),
-
+    setChatHeads: (heads) => set({ chatHeads: heads }),
     addChatHead: (head) =>
-        set((state) => ({
-            chatHeads: [...state.chatHeads, head],
-        })),
-
+        set((state) => ({ chatHeads: [...state.chatHeads, head] })),
     removeChatHead: (id) =>
-        set((state) => {
-            const newAllChats = { ...state.allChats };
-            delete newAllChats[id]; // Also remove the messages for the deleted chat
-            return {
-                chatHeads: state.chatHeads.filter((chatHead) => chatHead.chatId !== id),
-                allChats: newAllChats,
-            };
-        }),
-
-    
-
-    allChats: {},
-
-    // Action to completely replace the messages for a given chatId (e.g., when fetching history)
-    setAllChatMessages: (chatId, messages) =>
         set((state) => ({
-            allChats: {
-                ...state.allChats,
-                [chatId]: messages, // Directly assign the new array
-            },
+            chatHeads: state.chatHeads.filter((h) => h.chatId !== id),
         })),
 
-    // Action to append new messages to an existing chat (e.g., user input, AI response)
-    appendChatMessages: (chatId, messages) =>
+
+
+    chatHistory: {},
+
+    setChatMessagesFromBackend: (backend) =>
         set((state) => {
-            const existingMessages = state.allChats[chatId] || [];
-
-            const newMessages = [...existingMessages, ...messages];
-
-            let updatedChatHeads = state.chatHeads;
-
-            if (existingMessages.length === 0 && messages.length > 0) {
-                // Find first USER message (not AI)
-                const firstUserMessage = messages.find((msg) => msg.sender === 'user');
-                if (firstUserMessage?.text) {
-                    updatedChatHeads = state.chatHeads.map((head) => {
-                        if (head.chatId === chatId) {
-                            return {
-                                ...head,
-                                preview: firstUserMessage.text,
-                            };
-                        }
-                        return head;
-                    });
-                }
-            }
-
             return {
-                allChats: {
-                    ...state.allChats,
-                    [chatId]: newMessages,
+                chatHistory: {
+                    ...state.chatHistory,
+                    [backend.chatId]: backend,
                 },
-                chatHeads: updatedChatHeads,
             };
         }),
 
-    reset: () =>
-        set({
-            chatHeads: [],
-            allChats: {},
+    appendChatMessage: (message, chatId) =>
+        set((state) => {
+            const concernedChatHistory = state.chatHistory[chatId] || {
+                messages: {},
+                order: [],
+                userId: useUserStateStore.getState().userId,
+                chatId: chatId,
+            };
+
+            return {
+                chatHistory: {
+                    ...state.chatHistory,
+                    [chatId]: {
+                        ...concernedChatHistory,
+                        messages: {
+                            ...concernedChatHistory.messages,
+                            [message.msgId]: message,
+                        },
+                        order: [...concernedChatHistory.order, message.msgId]
+                    }
+                },
+            };
         }),
+
+    updateChatMessage: (chatId, msgId, chunkContent) =>
+        set((state) => {
+            const concernedChatHistory = state.chatHistory[chatId];
+            const oldMsg = concernedChatHistory.messages[msgId];
+            if (!oldMsg) return state; // nothing to update
+
+            return {
+                chatHistory: {
+                    ...state.chatHistory,
+                    [chatId]: {
+                        ...concernedChatHistory,
+                        messages: {
+                            ...concernedChatHistory.messages,
+                            [msgId]: {
+                                ...oldMsg,
+                                content: oldMsg.content + chunkContent, // chunk append
+                            },
+                        },
+                    },
+
+                },
+            };
+        }),
+
+
+    removeChatHistoryByChatId: (chatId) =>
+        set((state) => {
+            const { [chatId]: _, ...rest } = state.chatHistory;
+            return {
+                chatHistory: rest,
+            };
+        }),
+
+
+    reset: () => set({
+        chatHeads: [],
+        chatHistory: {},
+    }),
 }));

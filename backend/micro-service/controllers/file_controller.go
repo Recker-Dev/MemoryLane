@@ -15,7 +15,7 @@ import (
 )
 
 // Request needs to wait till files are written down in a folder.
-func UploadFiles(c *gin.Context) {
+func UploadChatFiles(c *gin.Context) {
 	userId := c.Param("userId")
 	chatId := c.Param("chatId")
 
@@ -97,7 +97,7 @@ func UploadFiles(c *gin.Context) {
 }
 
 // Request does not need to wait
-func DeleteFiles(c *gin.Context) {
+func DeleteChatFiles(c *gin.Context) {
 	userId := c.Param("userId")
 	chatId := c.Param("chatId")
 
@@ -188,4 +188,61 @@ func DeleteFiles(c *gin.Context) {
 		"valid_file_ids":         validIds,
 		"deletion_requested_for": len(toBeDeletedEntries),
 	})
+}
+
+func GetFiles(c *gin.Context) {
+	userId := c.Param("userId")
+	chatId := c.Param("chatId")
+
+	if userId == "" || chatId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "userId and chatId are required"})
+		return
+	}
+
+	filesUploadData, err := fileservices.HandleFilesGet(userId, chatId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": filesUploadData})
+
+}
+
+func SetPersistanceChatFile(c *gin.Context) {
+	userId := c.Param("userId")
+	chatId := c.Param("chatId")
+	fileId := c.Param("fileId")
+
+	if userId == "" || chatId == "" || fileId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "userId, chatId, and fileId are required"})
+		return
+	}
+
+	var input struct {
+		Persist *bool `json:"persist"`
+	}
+
+	// Bind JSON body into struct
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if input.Persist == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "persist field is required and must be true or false",
+		})
+		return
+	}
+
+	if err := fileservices.SetFilePersistence(userId, chatId, fileId, *input.Persist); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true,
+		"message": fmt.Sprintf("File persistence set to %v", *input.Persist),
+		"fileId":  fileId})
+
 }

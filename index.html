@@ -78,7 +78,7 @@
   <h3>Memory Ids (comma-separated)</h3>
   <input type="text" id="memIds"><br><br>
 
-  <button onclick="sendFullStream()">Send Full Stream</button>
+  <button onclick="sendMessage()">Send Message</button>
 
   <h3>Live Server Response</h3>
   <pre id="liveOutput" class="output-text"></pre>
@@ -87,90 +87,56 @@
   <pre id="log"></pre>
 
   <script>
-    // const userId = "123";
-    // const chatId = Math.random().toString(36).substring(2, 15);;
     const userId = "1";
     const chatId = "tannu";
+
     const ws = new WebSocket(`ws://localhost:8082/ws?userId=${userId}&chatId=${chatId}`);
-    ws.binaryType = "arraybuffer";
-
-    // const currentStream = {
-    //   id: null,
-    //   buffer: []
-    // };
-    let currentStream = new Uint8Array(0);
-
-
     ws.onopen = () => log("✅ WebSocket connected");
 
-    ws.onmessage = async (event) => {
-      const chunk = new Uint8Array(event.data);
-      const newBuffer = new Uint8Array(currentStream.length + chunk.length);
-      newBuffer.set(currentStream, 0);
-      newBuffer.set(chunk, currentStream.length);
-      currentStream = newBuffer;
-      const partial = new TextDecoder().decode(Uint8Array.from(currentStream));
-      document.getElementById("liveOutput").textContent = partial;
-      log(`✏️ Partial chunk, total ${currentStream.length} bytes`);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        const liveEl = document.getElementById("liveOutput");
+        console.log(msg)
+        if (msg.type === "chunk") {
+          // append chunk to current message
+          log(`➡️ Chunk Index: ${msg.chunkIdx}`);
+          liveEl.textContent += msg.content.trim()+" ";
+          
+        } else if (msg.type === "control") {
+          log(`⚡ Control signal received: ${msg.signal}`);
+          if (msg.signal === "start") {
+            // clear previous output at the start of a new query
+            liveEl.textContent = "";
+          }
+        }
+      } catch (err) {
+        log(`❌ Failed to parse incoming message: ${err}`);
+      }
     };
 
-
-    ws.onerror = (err) => log("❌ Error: " + err);
+    ws.onerror = (err) => log("❌ WebSocket error: " + err);
     ws.onclose = () => log("🔌 Connection closed");
 
-    async function sendFullStream() {
-      // Reset currentStream for new chat send
-      currentStream = new Uint8Array(0);
-
+    function sendMessage() {
       const text = document.getElementById("textInput").value;
       const messageId = document.getElementById("messageId").value;
-      const fileIds = document.getElementById("fileIds").value;
-      const memIds = document.getElementById("memIds").value;
-      const encoder = new TextEncoder();
-      const chunks = encoder.encode(text);
+      const fileIds = document.getElementById("fileIds").value.split(",").map(s => s.trim()).filter(Boolean);
+      const memIds = document.getElementById("memIds").value.split(",").map(s => s.trim()).filter(Boolean);
 
-      // 1. Send user_start
-      const startMsg = {
-        type: "user_start",
-        userId,
+      const payload = {
+        msgId: messageId,
         chatId,
-        messageId,
-        selectedFileIds: fileIds.split(",").map(s => s.trim()).filter(Boolean),
-        selectedMemories: memIds.split(",").map(s => s.trim()).filter(Boolean),
-      };
-      ws.send(JSON.stringify(startMsg));
-      log("➡️ Sent: user_start");
-
-      // 2. Send binary in 8192-byte chunks with batching
-      const chunkSize = 8192;
-      const batchSize = 5;
-      const totalLength = chunks.length;
-
-      for (let i = 0; i < totalLength; i += chunkSize * batchSize) {
-        for (let j = 0; j < batchSize; j++) {
-          const start = i + j * chunkSize;
-          if (start >= totalLength) break;
-
-          const end = Math.min(start + chunkSize, totalLength);
-          const slice = chunks.slice(start, end);
-
-          ws.send(slice);
-          log(`➡️ Sent chunk [${start}–${end}]`);
-        }
-        await new Promise((res) => setTimeout(res, 10));
-      }
-
-      // 3. Send user_end
-      const endMsg = {
-        type: "user_end",
         userId,
-        chatId,
-        messageId,
-        selectedFileIds: fileIds.split(",").map(s => s.trim()).filter(Boolean),
-        selectedMemories: memIds.split(",").map(s => s.trim()).filter(Boolean),
+        role: "user",
+        content: text,
+        fileIds,
+        memIds,
+        timestamp: new Date().toISOString()
       };
-      ws.send(JSON.stringify(endMsg));
-      log("➡️ Sent: user_end");
+
+      ws.send(JSON.stringify(payload));
+      log(`➡️ Sent message: ${messageId}`);
     }
 
     function log(msg) {
@@ -181,5 +147,6 @@
   </script>
 
 </body>
+
 
 </html>

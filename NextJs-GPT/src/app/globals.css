@@ -205,3 +205,15 @@
 .animate-slide-in-stay-out {
   animation: slide-in-stay-out 4.5s ease-in-out forwards;
 }
+
+@keyframes shake-rotate {
+    0%   { transform: rotate(0deg); }
+    25%  { transform: rotate(-30deg); }
+    50%  { transform: rotate(0deg); }
+    75%  { transform: rotate(30deg); }
+    100% { transform: rotate(0deg); }
+  }
+
+.shake-rotate {
+  animation: shake 0.5s ease-in-out;
+}
