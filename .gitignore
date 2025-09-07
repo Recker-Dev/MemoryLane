@@ -46,10 +46,10 @@ chat-backend/.env*
 chat-backend/dist/ # If your backend has a build output directory like 'dist'
 
 # NextJS-GPT specific
-NextJs-GPT/node_modules/
-NextJs-GPT/.env*
-NextJs-GPT/dist/
-NextJs-GPT/.next/
+frontend/node_modules/
+frontend/.env*
+frontend/dist/
+frontend/.next/
 
 
 
@@ -70,5 +70,5 @@ vectorDB
 ## uploads
 uploads
 
-## Test folders
-test-go
+## Test file
+index.html

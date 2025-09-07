@@ -15,7 +15,8 @@ import (
 )
 
 func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []string, sendChunk func(chunk string, chunkIdx int), sendSignal func(signal string)) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	client := config.GeminiClient
 	if client == nil {
@@ -27,25 +28,20 @@ func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []st
 
 	// 1. Fetch chats from Redis or fallback to DB
 	summary, messages, err := helperfuncs.FetchChatsFromRedis(ctx, KEY)
-	if err != nil {
-		log.Printf("[Memory] Redis fetch error for key %s: %v. Falling back to DB.", KEY, err)
-	} else if summary == "" {
-		log.Printf("[Memory] Redis summary empty for key %s. Falling back to DB.", KEY)
-	} else if len(messages) == 0 {
-		log.Printf("[Memory] Redis messages empty for key %s. Falling back to DB.", KEY)
-	}
 	if err != nil || (summary == "" && len(messages) == 0) {
-		dbSummary, dbMessages, err := helperfuncs.FetchChatSummaryAndLastMessages(ctx, userId, chatId)
+		log.Printf("[AIService] ⚠️ No Redis context for falling back to DB...")
+		dbSummary, dbMessages, dbErr := helperfuncs.FetchChatSummaryAndLastMessages(ctx, userId, chatId)
 		helperfuncs.UpdateSummaryInRedis(ctx, KEY, dbSummary)
-		if err != nil {
-			log.Printf("[DB] DB fetch failed for userId=%s chatId=%s. Proceeding without previous context...", userId, chatId)
-			summary = ""
-			messages = nil
+		if dbErr != nil {
+			log.Printf("[AIService] ❌ DB fetch failed proceeding without context")
+			summary, messages = "", nil
 		} else {
-			log.Printf("[DB] Successfully fetched chat summary and messages from DB for userId=%s chatId=%s", userId, chatId)
-			summary = dbSummary
-			messages = dbMessages
+			log.Printf("[AIService] ✅ Loaded context from DB.")
+			summary, messages = dbSummary, dbMessages
+			helperfuncs.UpdateSummaryInRedis(ctx, KEY, dbSummary)
 		}
+	} else {
+		log.Printf("[AIService] ✅ Loaded context from Redis")
 	}
 
 	// 2. Add user message
@@ -60,13 +56,13 @@ func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []st
 	//3. Vector search
 	vectorQueryResult, err := helperfuncs.TriggerVectorSearch(userId, chatId, query, filesIds)
 	if err != nil {
-		log.Printf("[AIService -> ProcessUserQuery] Ran into error querying VectorDB; Error: %v. Procedding without Vector DB Result..", err)
+		log.Printf("[AIService] ⚠️ Proceeding without vector results ...")
 	}
 
 	//4. Memory search
 	memorySearchResult, err := helperfuncs.SearchMemoriesInDB(ctx, userId, chatId, memIds)
 	if err != nil {
-		log.Printf("[AIService -> ProcessUserQuery] Ran into error searching memories; Error: %v. Procedding without Memory Search Results..", err)
+		log.Printf("[AIService] ⚠️ Proceeding without memories...")
 	}
 	// 5. Format Prompt
 	prompt := fmt.Sprintf(`You are a helpful, friendly, and conversational AI assistant.  
@@ -137,7 +133,8 @@ func StreamUserQueryResponse(userId, chatId, query string, filesIds, memIds []st
 	for resp, err := range iter {
 
 		if err != nil {
-			log.Printf("🔴 Gemini streaming error: %v", err)
+			log.Printf("[AIService] 🔴 Gemini streaming error: %v", err)
+			cancel()
 			return err
 		}
 		if resp == nil {

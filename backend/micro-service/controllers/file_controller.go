@@ -7,8 +7,7 @@ import (
 
 	helperfuncs "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/helperfuncs"
 	models "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/models"
-	databaseservices "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/services/database-services"
-	fileservices "github.com/Recker-Dev/NextJs-GPT/backend/micro-service/services/file-services"
+	"github.com/Recker-Dev/NextJs-GPT/backend/micro-service/services"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -63,7 +62,7 @@ func UploadChatFiles(c *gin.Context) {
 	}
 
 	// Trigger Service for file uploading
-	uploadSummary := fileservices.HandleFileUpload(userId, chatId, files)
+	uploadSummary := services.HandleFileUpload(userId, chatId, files)
 
 	var successStatus string
 	var httpStatus int
@@ -78,9 +77,6 @@ func UploadChatFiles(c *gin.Context) {
 		successStatus = "partial"
 		httpStatus = http.StatusMultiStatus // 207
 	}
-
-	// Launch vectorization for any PDF if any.
-	// go helperfuncs.CarryVectorizationIfAny(uploadSummary.SuccessfulFileIds) // We handle pdf seperation inside
 
 	//  Replaced with raising a kafka task
 	go helperfuncs.CreateVectorizationTasks(userId, chatId, uploadSummary.Successful)
@@ -101,10 +97,9 @@ func DeleteChatFiles(c *gin.Context) {
 	userId := c.Param("userId")
 	chatId := c.Param("chatId")
 
-	type VectorDocsDeleteRequest struct {
+	var req struct {
 		FileIds []string `json:"file_ids"`
 	}
-	var req VectorDocsDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{
 			"success": false,
@@ -148,7 +143,7 @@ func DeleteChatFiles(c *gin.Context) {
 		"_id": bson.M{"$in": objectIds},
 	}
 
-	toBeDeletedEntries, err := databaseservices.FindMany[models.Upload](
+	toBeDeletedEntries, err := services.FindMany[models.Upload](
 		os.Getenv("FILE_COLLECTION"),
 		validEntriesFilter,
 	)
@@ -169,24 +164,44 @@ func DeleteChatFiles(c *gin.Context) {
 		return
 	}
 
-	validIds := []string{}
+	// Filter out files that are still processing
+	var deletableEntries []models.Upload
+	var blockedIds []string
 	for _, entry := range toBeDeletedEntries {
+		if entry.Status == "processing" {
+			blockedIds = append(blockedIds, entry.ID.Hex())
+		} else {
+			deletableEntries = append(deletableEntries, entry)
+		}
+	}
+
+	if len(deletableEntries) == 0 {
+		c.JSON(400, gin.H{
+			"success":          false,
+			"error":            "None of the selected files can be deleted because they are currently processing.",
+			"blocked_file_ids": blockedIds,
+		})
+		return
+	}
+
+	validIds := []string{}
+	for _, entry := range deletableEntries {
 		validIds = append(validIds, entry.ID.Hex())
 	}
 
 	// log.Printf("[DeleteFiles] Found %d documents to delete. Triggering process in background...", len(toBeDeletedEntries))
 
-	// Launch go routine
-	go fileservices.HandleFilesDelete(toBeDeletedEntries)
-	go helperfuncs.CarryVectorDocsDeletionTask(userId, chatId, toBeDeletedEntries)
+	// Launch deletion for allowed files
+	go services.HandleFilesDelete(deletableEntries)
+	go helperfuncs.CarryVectorDocsDeletionTask(userId, chatId, deletableEntries)
 
-	// Return immediately
 	c.JSON(202, gin.H{
 		"success":                true,
-		"message":                "File deletion initiated in background.",
+		"message":                "File deletion initiated in background for allowed files.",
 		"invalid_file_ids":       failedConversions,
+		"blocked_file_ids":       blockedIds,
 		"valid_file_ids":         validIds,
-		"deletion_requested_for": len(toBeDeletedEntries),
+		"deletion_requested_for": len(deletableEntries),
 	})
 }
 
@@ -199,7 +214,7 @@ func GetFiles(c *gin.Context) {
 		return
 	}
 
-	filesUploadData, err := fileservices.HandleFilesGet(userId, chatId)
+	filesUploadData, err := services.HandleFilesGet(userId, chatId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
@@ -236,7 +251,7 @@ func SetPersistanceChatFile(c *gin.Context) {
 		return
 	}
 
-	if err := fileservices.SetFilePersistence(userId, chatId, fileId, *input.Persist); err != nil {
+	if err := services.SetFilePersistence(userId, chatId, fileId, *input.Persist); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
